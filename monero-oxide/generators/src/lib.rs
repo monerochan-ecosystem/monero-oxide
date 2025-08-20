@@ -47,6 +47,18 @@ pub fn H_pow_2() -> &'static [EdwardsPoint; 64] {
   &H_POW_2_CELL
 }
 
+/// Monero's `T`, used to blind the key-image commitment present within output keys.
+pub static T: LazyLock<EdwardsPoint> =
+  LazyLock::new(|| hash_to_point(keccak256(b"Monero Generator T")));
+
+/// FCMP++s's key-image generator blinding generator `U`.
+pub static FCMP_U: LazyLock<EdwardsPoint> =
+  LazyLock::new(|| hash_to_point(keccak256(b"Monero FCMP++ Generator U")));
+
+/// FCMP++s's randomness commitment generator `V`.
+pub static FCMP_V: LazyLock<EdwardsPoint> =
+  LazyLock::new(|| hash_to_point(keccak256(b"Monero FCMP++ Generator V")));
+
 /// The maximum amount of commitments provable for within a single range proof.
 pub const MAX_COMMITMENTS: usize = 16;
 /// The amount of bits a value within a commitment may use.
