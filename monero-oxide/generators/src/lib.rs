@@ -158,7 +158,7 @@ pub static SELENE_HASH_INIT: LazyLock<SelenePoint> = LazyLock::new(|| {
 */
 const MAX_GENERATORS_PER_FCMP_LAYER: usize = 512;
 
-/// Contrainer struct for FCMP generators.
+/// Container struct for FCMP generators.
 pub struct FcmpGenerators<C: ciphersuite::Ciphersuite> {
   /// The underlying generators.
   pub generators: generalized_bulletproofs::Generators<C>,
@@ -168,6 +168,8 @@ where
   C::G: GroupEncoding<Repr = [u8; 32]>,
 {
   fn new_internal() -> Self {
+    use std_shims::{alloc::format, string::String};
+
     let id = String::from_utf8(C::ID.to_vec()).expect("Helios/Selene din't have a UTF-8 ID");
     let g = rejection_sampling_hash_to_curve::<C::G>(format!("Monero {id} G").as_bytes());
     let h = rejection_sampling_hash_to_curve::<C::G>(format!("Monero {id} H").as_bytes());
