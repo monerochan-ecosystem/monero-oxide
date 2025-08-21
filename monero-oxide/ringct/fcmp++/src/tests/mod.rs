@@ -14,7 +14,7 @@ use ec_divisors::{DivisorCurve, ScalarDecomposition};
 use monero_generators::{T, FCMP_U, FCMP_V};
 
 use crate::{
-  SELENE_GENERATORS, HELIOS_GENERATORS, SELENE_HASH_INIT, FCMP_PARAMS, Output,
+  SELENE_FCMP_GENERATORS, HELIOS_FCMP_GENERATORS, SELENE_HASH_INIT, FCMP_PARAMS, Output,
   fcmps::{TreeRoot, Path, Branches, OBlind, IBlind, IBlindBlind, CBlind, OutputBlinds, Fcmp},
   sal::*,
   FcmpPlusPlus,
@@ -59,7 +59,7 @@ fn test() {
             <Ed25519 as Ciphersuite>::G::to_xy(output.C()).unwrap().1,
           ]
           .into_iter()
-          .zip(SELENE_GENERATORS.g_bold_slice().iter().copied())
+          .zip(SELENE_FCMP_GENERATORS.generators.g_bold_slice().iter().copied())
           .collect::<Vec<_>>()),
         ),
     );
@@ -131,6 +131,6 @@ fn test() {
     .unwrap();
 
   assert!(ed_verifier.verify_vartime());
-  assert!(SELENE_GENERATORS.verify(c1_verifier));
-  assert!(HELIOS_GENERATORS.verify(c2_verifier));
+  assert!(SELENE_FCMP_GENERATORS.generators.verify(c1_verifier));
+  assert!(HELIOS_FCMP_GENERATORS.generators.verify(c2_verifier));
 }

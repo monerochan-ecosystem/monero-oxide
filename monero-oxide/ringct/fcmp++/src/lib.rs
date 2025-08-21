@@ -20,14 +20,11 @@ use ciphersuite::{
 };
 use helioselene::{Selene, Helios};
 
-use generalized_bulletproofs::Generators;
 use generalized_bulletproofs_ec_gadgets::*;
 pub use fcmps;
 use fcmps::*;
 
-use monero_io::write_varint;
-use monero_primitives::keccak256;
-use monero_generators::{T, FCMP_U, FCMP_V};
+use monero_generators::{T, FCMP_U, FCMP_V, HELIOS_HASH_INIT, SELENE_HASH_INIT, FcmpGenerators};
 
 /// The Spend-Authorization and Linkability proof.
 pub mod sal;
@@ -78,65 +75,17 @@ impl FcmpCurves for Curves {
   type C2Parameters = HeliosParams;
 }
 
-fn hash_to_point_on_curve<C: Ciphersuite>(buf: &[u8]) -> C::G {
-  let mut buf = keccak256(buf);
-  let mut repr = <C::G as GroupEncoding>::Repr::default();
-  loop {
-    repr.as_mut().copy_from_slice(&buf);
-    if let Ok(point) = C::read_G(&mut repr.as_ref()) {
-      return point;
-    }
-    buf = keccak256(buf);
-  }
-}
-
-/// The hash-initialization generator for Helios hashes.
-static HELIOS_HASH_INIT: LazyLock<<Helios as Ciphersuite>::G> =
-  LazyLock::new(|| hash_to_point_on_curve::<Helios>(b"Monero Helios Hash Initializer"));
-
-/// The hash-initialization generator for Selene hashes.
-static SELENE_HASH_INIT: LazyLock<<Selene as Ciphersuite>::G> =
-  LazyLock::new(|| hash_to_point_on_curve::<Selene>(b"Monero Selene Hash Initializer"));
-
-/// The generators for Helios.
-static HELIOS_GENERATORS: LazyLock<Generators<Helios>> = LazyLock::new(|| {
-  let g = hash_to_point_on_curve::<Helios>(b"Monero Helios G");
-  let h = hash_to_point_on_curve::<Helios>(b"Monero Helios H");
-  let mut g_bold = Vec::with_capacity(2048);
-  let mut h_bold = Vec::with_capacity(2048);
-  for i in 0u32 .. 2048 {
-    let mut g_buf = b"Monero Helios G ".to_vec();
-    write_varint(&i, &mut g_buf).unwrap();
-    g_bold.push(hash_to_point_on_curve::<Helios>(&g_buf));
-
-    let mut h_buf = b"Monero Helios H ".to_vec();
-    write_varint(&i, &mut h_buf).unwrap();
-    h_bold.push(hash_to_point_on_curve::<Helios>(&h_buf));
-  }
-  Generators::new(g, h, g_bold, h_bold).unwrap()
-});
-
-static SELENE_GENERATORS: LazyLock<Generators<Selene>> = LazyLock::new(|| {
-  let g = hash_to_point_on_curve::<Selene>(b"Monero Selene G");
-  let h = hash_to_point_on_curve::<Selene>(b"Monero Selene H");
-  let mut g_bold = Vec::with_capacity(4096);
-  let mut h_bold = Vec::with_capacity(4096);
-  for i in 0u32 .. 4096 {
-    let mut g_buf = b"Monero Selene G ".to_vec();
-    write_varint(&i, &mut g_buf).unwrap();
-    g_bold.push(hash_to_point_on_curve::<Selene>(&g_buf));
-
-    let mut h_buf = b"Monero Selene H ".to_vec();
-    write_varint(&i, &mut h_buf).unwrap();
-    h_bold.push(hash_to_point_on_curve::<Selene>(&h_buf));
-  }
-  Generators::new(g, h, g_bold, h_bold).unwrap()
-});
+/// The FCMP generators for Helios.
+static HELIOS_FCMP_GENERATORS: LazyLock<FcmpGenerators<Helios>> =
+  LazyLock::new(FcmpGenerators::<Helios>::new);
+/// The FCMP generators for Selene.
+static SELENE_FCMP_GENERATORS: LazyLock<FcmpGenerators<Selene>> =
+  LazyLock::new(FcmpGenerators::<Selene>::new);
 
 static FCMP_PARAMS: LazyLock<FcmpParams<Curves>> = LazyLock::new(|| {
   FcmpParams::<Curves>::new(
-    SELENE_GENERATORS.clone(),
-    HELIOS_GENERATORS.clone(),
+    SELENE_FCMP_GENERATORS.generators.clone(),
+    HELIOS_FCMP_GENERATORS.generators.clone(),
     // Hash init generators
     *SELENE_HASH_INIT,
     *HELIOS_HASH_INIT,

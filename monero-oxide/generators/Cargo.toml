@@ -21,10 +21,14 @@ std-shims = { version = "0.1.4", default-features = false }
 subtle = { version = "^2.4", default-features = false }
 
 sha3 = { version = "0.10", default-features = false }
-curve25519-dalek = { version = "4", default-features = false, features = ["alloc", "zeroize"] }
 
-group = { version = "0.13", default-features = false }
+group = { version = "0.13", default-features = false, features = ["alloc"] }
+ciphersuite = { version = "0.4", default-features = false, features = ["alloc"] }
+curve25519-dalek = { version = "4", default-features = false, features = ["alloc", "zeroize"] }
 dalek-ff-group = { version = "0.4", default-features = false }
+helioselene = { path = "../../crypto/helioselene", version = "0.1", default-features = false }
+
+generalized-bulletproofs = { path = "../../crypto/generalized-bulletproofs", default-features = false }
 
 monero-io = { path = "../io", version = "0.1", default-features = false }
 
@@ -39,7 +43,11 @@ std = [
 
   "sha3/std",
 
-  "group/alloc",
+  "ciphersuite/std",
+  "dalek-ff-group/std",
+  "helioselene/std",
+
+  "generalized-bulletproofs/std",
 
   "monero-io/std"
 ]

@@ -975,8 +975,6 @@ dependencies = [
  "helioselene",
  "modular-frost",
  "monero-generators",
- "monero-io",
- "monero-primitives",
  "multiexp",
  "rand_chacha",
  "rand_core",
@@ -988,9 +986,12 @@ dependencies = [
 name = "monero-generators"
 version = "0.4.0"
 dependencies = [
+ "ciphersuite",
  "curve25519-dalek",
  "dalek-ff-group",
+ "generalized-bulletproofs",
  "group",
+ "helioselene",
  "hex",
  "monero-io",
  "sha3",

@@ -13,9 +13,6 @@ rust-version = "1.66"
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
-[package.metadata.cargo-machete]
-ignored = ["ec-divisors"]
-
 [lints]
 workspace = true
 
@@ -40,9 +37,7 @@ ec-divisors = { path = "../../../crypto/divisors", default-features = false, fea
 generalized-bulletproofs-ec-gadgets = { path = "../../../crypto/fcmps/ec-gadgets", default-features = false }
 fcmps = { package = "full-chain-membership-proofs", path = "../../../crypto/fcmps", default-features = false }
 
-monero-io = { path = "../../io", default-features = false }
 monero-generators = { path = "../../generators", default-features = false }
-monero-primitives = { path = "../../primitives", default-features = false }
 
 rand_chacha = { version = "0.3", default-features = false, optional = true }
 transcript = { package = "flexible-transcript", version = "0.3", default-features = false, features = ["recommended"], optional = true }
@@ -72,9 +67,7 @@ std = [
   "generalized-bulletproofs-ec-gadgets/std",
   "fcmps/std",
 
-  "monero-io/std",
   "monero-generators/std",
-  "monero-primitives/std",
 
   "rand_chacha?/std",
   "transcript?/std",
