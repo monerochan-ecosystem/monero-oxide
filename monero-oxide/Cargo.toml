@@ -12,6 +12,9 @@ rust-version = "1.74"
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
+[package.metadata.cargo-machete]
+ignored = ["monero-fcmp-plus-plus"]
+
 [lints]
 workspace = true
 
@@ -29,6 +32,7 @@ monero-mlsag = { path = "ringct/mlsag", version = "0.1", default-features = fals
 monero-clsag = { path = "ringct/clsag", version = "0.1", default-features = false }
 monero-borromean = { path = "ringct/borromean", version = "0.1", default-features = false }
 monero-bulletproofs = { path = "ringct/bulletproofs", version = "0.1", default-features = false }
+monero-fcmp-plus-plus = { path = "ringct/fcmp++", version = "0.1", default-features = false }
 
 hex-literal = { version = ">= 0.4, <= 1", default-features = false }
 
@@ -52,5 +56,9 @@ std = [
   "monero-bulletproofs/std",
 ]
 
-compile-time-generators = ["curve25519-dalek/precomputed-tables", "monero-bulletproofs/compile-time-generators"]
+compile-time-generators = [
+  "curve25519-dalek/precomputed-tables",
+  "monero-bulletproofs/compile-time-generators",
+  "monero-fcmp-plus-plus/compile-time-generators",
+]
 default = ["std", "compile-time-generators"]

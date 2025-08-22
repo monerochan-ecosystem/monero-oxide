@@ -43,6 +43,11 @@ rand_chacha = { version = "0.3", default-features = false, optional = true }
 transcript = { package = "flexible-transcript", version = "0.3", default-features = false, features = ["recommended"], optional = true }
 modular-frost = { version = "0.10", default-features = false, features = ["ed25519"], optional = true }
 
+[build-dependencies]
+helioselene = { path = "../../../crypto/helioselene", default-features = false }
+ciphersuite = { version = "0.4", default-features = false, features = ["ed25519"] }
+monero-generators = { path = "../../generators", default-features = false }
+
 [dev-dependencies]
 rand_chacha = { version = "0.3", default-features = false }
 transcript = { package = "flexible-transcript", version = "0.3", default-features = false, features = ["recommended"] }
@@ -72,5 +77,6 @@ std = [
   "rand_chacha?/std",
   "transcript?/std",
 ]
+compile-time-generators = ["curve25519-dalek/precomputed-tables"]
 multisig = ["std", "transcript", "modular-frost"]
-default = ["std"]
+default = ["std", "compile-time-generators"]

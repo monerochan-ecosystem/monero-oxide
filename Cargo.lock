@@ -1031,6 +1031,7 @@ dependencies = [
  "monero-borromean",
  "monero-bulletproofs",
  "monero-clsag",
+ "monero-fcmp-plus-plus",
  "monero-generators",
  "monero-io",
  "monero-mlsag",

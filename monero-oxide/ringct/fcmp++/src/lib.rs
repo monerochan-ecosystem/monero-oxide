@@ -75,12 +75,7 @@ impl FcmpCurves for Curves {
   type C2Parameters = HeliosParams;
 }
 
-/// The FCMP generators for Helios.
-static HELIOS_FCMP_GENERATORS: LazyLock<FcmpGenerators<Helios>> =
-  LazyLock::new(FcmpGenerators::<Helios>::new);
-/// The FCMP generators for Selene.
-static SELENE_FCMP_GENERATORS: LazyLock<FcmpGenerators<Selene>> =
-  LazyLock::new(FcmpGenerators::<Selene>::new);
+include!(concat!(env!("OUT_DIR"), "/generators.rs"));
 
 static FCMP_PARAMS: LazyLock<FcmpParams<Curves>> = LazyLock::new(|| {
   FcmpParams::<Curves>::new(
