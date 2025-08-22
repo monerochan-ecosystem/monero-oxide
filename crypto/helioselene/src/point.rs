@@ -31,9 +31,15 @@ macro_rules! curve {
 
     const B: $Field = $B;
 
+    // Evaluate the curve equation to obtain what would be the `y^2` for this `x`, if it was the
+    // `x` coordinate for a valid, on-curve point
+    fn curve_equation(x: $Field) -> $Field {
+      (x.square() * x) - x - x - x + B
+    }
+
     fn recover_y(x: $Field) -> CtOption<$Field> {
       // x**3 + -3x + B
-      ((x.square() * x) - x - x - x + B).sqrt()
+      curve_equation(x).sqrt()
     }
 
     /// Point.
@@ -392,6 +398,17 @@ macro_rules! curve {
     }
 
     impl PrimeGroup for $Point {}
+
+    impl $Point {
+      /// Instantiate a point from its `x, y` coordinates in the affine model.
+      ///
+      /// Returns `None` if the provided coordinates don't satisfy the curve equation.
+      // Unfortunately, there's no API in `group` to model affine coordinates, even though there is
+      // a trait to model affine points...
+      pub fn from_xy(x: $Field, y: $Field) -> CtOption<Self> {
+        CtOption::new(Self { x, y, z: $Field::ONE }, y.square().ct_eq(&curve_equation(x)))
+      }
+    }
 
     impl ec_divisors::DivisorCurve for $Point {
       type FieldElement = $Field;
