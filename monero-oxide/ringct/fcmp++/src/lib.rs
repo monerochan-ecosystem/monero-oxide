@@ -24,7 +24,7 @@ use generalized_bulletproofs_ec_gadgets::*;
 pub use fcmps;
 use fcmps::*;
 
-use monero_generators::{T, FCMP_U, FCMP_V, HELIOS_HASH_INIT, SELENE_HASH_INIT, FcmpGenerators};
+use monero_generators::{T, FCMP_U, FCMP_V, HELIOS_HASH_INIT, SELENE_HASH_INIT};
 
 /// The Spend-Authorization and Linkability proof.
 pub mod sal;
