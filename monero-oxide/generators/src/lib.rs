@@ -152,11 +152,10 @@ pub static SELENE_HASH_INIT: LazyLock<SelenePoint> = LazyLock::new(|| {
   rejection_sampling_hash_to_curve::<SelenePoint>(b"Monero Selene Hash Initializer")
 });
 
-/*
-  TODO: Remove this. This is an inaccurate constant which should be sourced from the FCMP library,
-  not declared here.
-*/
-const MAX_GENERATORS_PER_FCMP_LAYER: usize = 512;
+const FCMP_GENERATORS: (usize, usize) =
+  full_chain_membership_proofs::Fcmp::<()>::ipa_rows(MAX_FCMP_INPUTS, MAX_FCMP_LAYERS);
+const FCMP_SELENE_GENERATORS: usize = FCMP_GENERATORS.0;
+const FCMP_HELIOS_GENERATORS: usize = FCMP_GENERATORS.1;
 
 /// Container struct for FCMP generators.
 pub struct FcmpGenerators<C: ciphersuite::Ciphersuite> {
@@ -167,17 +166,15 @@ impl<C: ciphersuite::Ciphersuite> FcmpGenerators<C>
 where
   C::G: GroupEncoding<Repr = [u8; 32]>,
 {
-  fn new_internal() -> Self {
+  fn new_internal(generators: usize) -> Self {
     use std_shims::{alloc::format, string::String};
 
     let id = String::from_utf8(C::ID.to_vec()).expect("Helios/Selene din't have a UTF-8 ID");
     let g = rejection_sampling_hash_to_curve::<C::G>(format!("Monero {id} G").as_bytes());
     let h = rejection_sampling_hash_to_curve::<C::G>(format!("Monero {id} H").as_bytes());
-    const FCMP_GENERATORS: usize =
-      (MAX_FCMP_INPUTS * MAX_FCMP_LAYERS * MAX_GENERATORS_PER_FCMP_LAYER).next_power_of_two();
-    let mut g_bold = Vec::with_capacity(FCMP_GENERATORS);
-    let mut h_bold = Vec::with_capacity(FCMP_GENERATORS);
-    for i in 0 .. FCMP_GENERATORS {
+    let mut g_bold = Vec::with_capacity(generators);
+    let mut h_bold = Vec::with_capacity(generators);
+    for i in 0 .. generators {
       g_bold
         .push(rejection_sampling_hash_to_curve::<C::G>(format!("Monero {id} G {i}").as_bytes()));
       h_bold
@@ -197,7 +194,7 @@ impl FcmpGenerators<Helios> {
   /// once-initialized static.
   #[allow(clippy::new_without_default)]
   pub fn new() -> Self {
-    Self::new_internal()
+    Self::new_internal(FCMP_HELIOS_GENERATORS)
   }
 }
 
@@ -208,6 +205,6 @@ impl FcmpGenerators<Selene> {
   /// once-initialized static.
   #[allow(clippy::new_without_default)]
   pub fn new() -> Self {
-    Self::new_internal()
+    Self::new_internal(FCMP_SELENE_GENERATORS)
   }
 }

@@ -6,7 +6,7 @@ license = "MIT"
 repository = "https://github.com/monero-oxide/monero-oxide/tree/develop/monero-oxide/generators"
 authors = ["Luke Parker <lukeparker5132@gmail.com>"]
 edition = "2021"
-rust-version = "1.65"
+rust-version = "1.66"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -29,6 +29,7 @@ dalek-ff-group = { version = "0.4", default-features = false }
 helioselene = { path = "../../crypto/helioselene", version = "0.1", default-features = false }
 
 generalized-bulletproofs = { path = "../../crypto/generalized-bulletproofs", default-features = false }
+full-chain-membership-proofs = { path = "../../crypto/fcmps", default-features = false }
 
 monero-io = { path = "../io", version = "0.1", default-features = false }
 

@@ -989,6 +989,7 @@ dependencies = [
  "ciphersuite",
  "curve25519-dalek",
  "dalek-ff-group",
+ "full-chain-membership-proofs",
  "generalized-bulletproofs",
  "group",
  "helioselene",
