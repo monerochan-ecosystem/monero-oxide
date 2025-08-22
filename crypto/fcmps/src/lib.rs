@@ -179,11 +179,40 @@ impl From<AcError> for FcmpError {
 
 /// The full-chain membership proof.
 #[derive(Clone, Debug, Zeroize)]
-pub struct Fcmp<C: FcmpCurves> {
+pub struct Fcmp<C> {
   _curves: PhantomData<C>,
   proof: Vec<u8>,
   root_blind_pok: [u8; 64],
 }
+
+impl<C> Fcmp<C> {
+  /// Returns how many rows would be used in each of the two IPAs.
+  ///
+  /// This may panic if too many inputs/layers are specified, causing an overflow. This may return
+  /// an incorrect value if either `inputs` or `layers` is zero.
+  pub const fn ipa_rows(inputs: usize, layers: usize) -> (usize, usize) {
+    // usize::max isn't `const`
+    const fn const_max(a: usize, b: usize) -> usize {
+      if a < b {
+        b
+      } else {
+        a
+      }
+    }
+
+    let non_leaves_c1_branches = layers.saturating_sub(1) / 2;
+    let c1_rows =
+      inputs * (C1_LEAVES_ROWS_PER_INPUT + (non_leaves_c1_branches * C1_BRANCH_ROWS_PER_INPUT));
+
+    let c2_branches = layers / 2;
+    let c2_rows = inputs * const_max(c2_branches * C2_ROWS_PER_INPUT_PER_LAYER, 1);
+
+    let c1_rows = c1_rows.next_power_of_two();
+    let c2_rows = c2_rows.next_power_of_two();
+    (const_max(c1_rows, C1_TARGET_ROWS), const_max(c2_rows, C2_TARGET_ROWS))
+  }
+}
+
 impl<C: FcmpCurves> Fcmp<C>
 where
   <C::OC as Ciphersuite>::G: DivisorCurve<FieldElement = <C::C1 as Ciphersuite>::F>,
@@ -192,25 +221,6 @@ where
   <C::C1 as Ciphersuite>::F: FromUniformBytes<64>,
   <C::C2 as Ciphersuite>::F: FromUniformBytes<64>,
 {
-  // Returns pair of how many rows to use in the IPAs (each non-0).
-  fn ipa_rows(inputs: usize, layers: usize) -> (usize, usize) {
-    let non_leaves_c1_branches = layers.saturating_sub(1) / 2;
-    let c1_rows =
-      inputs * (C1_LEAVES_ROWS_PER_INPUT + (non_leaves_c1_branches * C1_BRANCH_ROWS_PER_INPUT));
-
-    let c2_branches = layers / 2;
-    let c2_rows = inputs * ((c2_branches * C2_ROWS_PER_INPUT_PER_LAYER).max(1));
-
-    let pad = |value| {
-      let mut res = 1;
-      while res < value {
-        res <<= 1;
-      }
-      res
-    };
-    (pad(c1_rows).max(C1_TARGET_ROWS), pad(c2_rows).max(C2_TARGET_ROWS))
-  }
-
   /// The proof size for a FCMP proving for so many inputs in a tree with so many layers.
   ///
   /// This is not as fast as presumable and should have its results cached.
