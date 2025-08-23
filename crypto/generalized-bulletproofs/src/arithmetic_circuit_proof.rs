@@ -210,10 +210,6 @@ where
       if c.g_values.len() > n {
         Err(AcError::NotEnoughGenerators)?;
       }
-      // The Pedersen vector commitments internally have n terms
-      while c.g_values.len() < n {
-        c.g_values.0.push(C::F::ZERO);
-      }
     }
 
     // Check the witness's consistency with the statement
@@ -235,21 +231,24 @@ where
         }
       }
       for constraint in &self.constraints {
-        let eval =
-          constraint
-            .WL
-            .iter()
-            .map(|(i, weight)| *weight * witness.aL[*i])
-            .chain(constraint.WR.iter().map(|(i, weight)| *weight * witness.aR[*i]))
-            .chain(constraint.WO.iter().map(|(i, weight)| *weight * witness.aO[*i]))
-            .chain(
-              constraint.WCG.iter().zip(&witness.c).flat_map(|(weights, c)| {
-                weights.iter().map(|(j, weight)| *weight * c.g_values[*j])
-              }),
-            )
-            .chain(constraint.WV.iter().map(|(i, weight)| *weight * witness.v[*i].value))
-            .chain(core::iter::once(constraint.c))
-            .sum::<C::F>();
+        let eval = constraint
+          .WL
+          .iter()
+          .map(|(i, weight)| *weight * witness.aL[*i])
+          .chain(constraint.WR.iter().map(|(i, weight)| *weight * witness.aR[*i]))
+          .chain(constraint.WO.iter().map(|(i, weight)| *weight * witness.aO[*i]))
+          .chain(constraint.WCG.iter().zip(&witness.c).flat_map(|(weights, c)| {
+            weights.iter().map(|(j, weight)| {
+              if let Some(value) = c.g_values.0.get(*j) {
+                *weight * value
+              } else {
+                C::F::ZERO
+              }
+            })
+          }))
+          .chain(constraint.WV.iter().map(|(i, weight)| *weight * witness.v[*i].value))
+          .chain(core::iter::once(constraint.c))
+          .sum::<C::F>();
 
         if eval != C::F::ZERO {
           Err(AcError::InconsistentWitness)?;
@@ -413,13 +412,15 @@ where
 
     let x: ScalarVector<C::F> = ScalarVector::powers(transcript.challenge::<C>(), t.len());
 
-    let poly_eval = |poly: &[ScalarVector<C::F>], x: &ScalarVector<_>| -> ScalarVector<_> {
+    let poly_eval = |poly: &[ScalarVector<C::F>], x: &ScalarVector<C::F>| -> ScalarVector<_> {
       let mut res = ScalarVector::<C::F>::new(n);
       for (i, coeff) in poly.iter().enumerate() {
         if coeff.is_empty() {
           continue;
         }
-        res = res + &(coeff.clone() * x[i]);
+        for (res, coeff) in res.0.iter_mut().zip(coeff.0.iter()) {
+          *res += *coeff * x[i];
+        }
       }
       res
     };
