@@ -249,15 +249,15 @@ where
     let mut c1_tape = VectorCommitmentTape::<<C::C1 as Ciphersuite>::F> {
       commitment_len: c1_padded_pow_2,
       current_j_offset: 0,
-      commitments: vec![],
-      branch_lengths: vec![],
+      commitments: Vec::with_capacity(inputs * layers),
+      branch_lengths: Vec::with_capacity(inputs * layers / 2),
     };
     let mut c1_branches = Vec::with_capacity((layers / 2) + (layers % 2));
     let mut c2_tape = VectorCommitmentTape::<<C::C2 as Ciphersuite>::F> {
       commitment_len: c2_padded_pow_2,
       current_j_offset: 0,
-      commitments: vec![],
-      branch_lengths: vec![],
+      commitments: Vec::with_capacity(inputs * layers),
+      branch_lengths: Vec::with_capacity(inputs * layers / 2),
     };
     let mut c2_branches = Vec::with_capacity(layers / 2);
 
@@ -548,7 +548,7 @@ where
   {
     let tree: TreeRoot<C::C1, C::C2> = match &branches.root {
       RootBranch::Leaves(leaves) => {
-        let mut items = vec![];
+        let mut items = Vec::with_capacity(leaves.len());
         for (scalar, point) in leaves
           .iter()
           .flat_map(|output| {
@@ -564,14 +564,14 @@ where
         TreeRoot::C1(params.curve_1_hash_init + multiexp::multiexp(&items))
       }
       RootBranch::C1(branches) => {
-        let mut items = vec![];
+        let mut items = Vec::with_capacity(branches.len());
         for (scalar, point) in branches.iter().zip(params.curve_1_generators.g_bold_slice()) {
           items.push((*scalar, *point));
         }
         TreeRoot::C1(params.curve_1_hash_init + multiexp::multiexp(&items))
       }
       RootBranch::C2(branches) => {
-        let mut items = vec![];
+        let mut items = Vec::with_capacity(branches.len());
         for (scalar, point) in branches.iter().zip(params.curve_2_generators.g_bold_slice()) {
           items.push((*scalar, *point));
         }
@@ -579,25 +579,24 @@ where
       }
     };
 
-    let (c1_padded_pow_2, c2_padded_pow_2) = Self::ipa_rows(
-      branches.per_input.len(),
-      usize::from(u8::from(branches.per_input[0].branches.leaves.is_some())) +
-        branches.per_input[0].branches.curve_1_layers.len() +
-        branches.per_input[0].branches.curve_2_layers.len() +
-        1,
-    );
+    let inputs = branches.per_input.len();
+    let layers = usize::from(u8::from(branches.per_input[0].branches.leaves.is_some())) +
+      branches.per_input[0].branches.curve_1_layers.len() +
+      branches.per_input[0].branches.curve_2_layers.len() +
+      1;
 
+    let (c1_padded_pow_2, c2_padded_pow_2) = Self::ipa_rows(inputs, layers);
     let mut c1_tape = VectorCommitmentTape::<<C::C1 as Ciphersuite>::F> {
       commitment_len: c1_padded_pow_2,
       current_j_offset: 0,
-      commitments: vec![],
-      branch_lengths: vec![],
+      commitments: Vec::with_capacity(inputs * layers),
+      branch_lengths: Vec::with_capacity(inputs * layers / 2),
     };
     let mut c2_tape = VectorCommitmentTape::<<C::C2 as Ciphersuite>::F> {
       commitment_len: c2_padded_pow_2,
       current_j_offset: 0,
-      commitments: vec![],
-      branch_lengths: vec![],
+      commitments: Vec::with_capacity(inputs * layers),
+      branch_lengths: Vec::with_capacity(inputs * layers / 2),
     };
 
     // This transcripts each input's branches, then the root
@@ -754,13 +753,7 @@ where
     c2_statement.prove(rng, &mut transcript, c2_witness.unwrap())?;
 
     let res = Fcmp { _curves: PhantomData, proof: transcript.complete(), root_blind_pok };
-    debug_assert_eq!(res.proof.len() + 64, {
-      let layers = 1 +
-        usize::from(u8::from(branches.per_input[0].branches.leaves.is_some())) +
-        branches.per_input[0].branches.curve_1_layers.len() +
-        branches.per_input[0].branches.curve_2_layers.len();
-      Self::proof_size(branches.per_input.len(), layers)
-    });
+    debug_assert_eq!(res.proof.len() + 64, Self::proof_size(inputs, layers));
     Ok(res)
   }
 
@@ -798,15 +791,15 @@ where
     let mut c1_tape = VectorCommitmentTape::<<C::C1 as Ciphersuite>::F> {
       commitment_len: c1_padded_pow_2,
       current_j_offset: 0,
-      commitments: vec![],
-      branch_lengths: vec![],
+      commitments: Vec::with_capacity(inputs.len() * layers),
+      branch_lengths: Vec::with_capacity(inputs.len() * layers / 2),
     };
     let mut c1_branches = Vec::with_capacity((layers / 2) + (layers % 2));
     let mut c2_tape = VectorCommitmentTape::<<C::C2 as Ciphersuite>::F> {
       commitment_len: c2_padded_pow_2,
       current_j_offset: 0,
-      commitments: vec![],
-      branch_lengths: vec![],
+      commitments: Vec::with_capacity(inputs.len() * layers),
+      branch_lengths: Vec::with_capacity(inputs.len() * layers / 2),
     };
     let mut c2_branches = Vec::with_capacity(layers / 2);
 

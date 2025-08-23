@@ -117,7 +117,7 @@ impl<F: Zeroize + PrimeFieldBits> VectorCommitmentTape<F> {
     let dlog_bits = Parameters::ScalarBits::USIZE;
 
     let witness = dlog.map(|dlog| {
-      let mut witness = vec![];
+      let mut witness = Vec::with_capacity(256);
       assert_eq!(dlog.len(), dlog_bits);
       for coeff in dlog {
         witness.push(F::from(*coeff));
@@ -159,7 +159,7 @@ impl<F: Zeroize + PrimeFieldBits> VectorCommitmentTape<F> {
     let witness = divisor.map(|divisor| {
       // Divisor y
       // This takes 1 slot
-      let mut divisor_witness = vec![];
+      let mut divisor_witness = Vec::with_capacity(256);
       divisor_witness.push(*divisor.y_coefficients.first().unwrap_or(&F::ZERO));
 
       // Divisor yx
@@ -241,7 +241,7 @@ impl<F: Zeroize + PrimeFieldBits> VectorCommitmentTape<F> {
   ) -> Vec<C::G> {
     assert_eq!(self.commitments.len(), blinds.len());
 
-    let mut res = vec![];
+    let mut res = Vec::with_capacity(self.commitments.len());
     for (i, (values, blind)) in self.commitments.iter().zip(blinds).enumerate() {
       let g_generators = generators.g_bold_slice()[.. values.len()].iter().copied();
       let commitment = g_generators.enumerate().map(|(i, g)| (values[i], g));
