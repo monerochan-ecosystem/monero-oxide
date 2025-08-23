@@ -16,7 +16,7 @@ use group::ff::{Field, FieldBits, PrimeField, PrimeFieldBits, FromUniformBytes};
 
 /// The field novel to Helios/Selene.
 #[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
-#[repr(C)]
+#[repr(transparent)]
 pub struct HelioseleneField(pub(crate) U256);
 
 /// The modulus of the field.
