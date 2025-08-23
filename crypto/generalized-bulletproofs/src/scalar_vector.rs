@@ -136,10 +136,9 @@ impl<F: PrimeField> ScalarVector<F> {
     res
   }
 
-  pub(crate) fn split(mut self) -> (Self, Self) {
+  pub(crate) fn split(mut self, at: usize) -> (Self, Self) {
     assert!(self.len() > 1);
-    let r = self.0.split_off(self.0.len() / 2);
-    debug_assert_eq!(self.len(), r.len());
+    let r = self.0.split_off(at);
     (self, ScalarVector(r))
   }
 }

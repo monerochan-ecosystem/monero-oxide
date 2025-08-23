@@ -59,10 +59,10 @@ fn test_inner_product() {
   // P = sum(g_bold * a, h_bold * b)
   let generators = generators::<Ristretto>(32);
   let mut verifier = Generators::batch_verifier();
-  for i in [1, 2, 4, 8, 16, 32] {
+  for i in 1 ..= 32 {
     let generators = generators.reduce(i).unwrap();
     let g = generators.g();
-    assert_eq!(generators.len(), i);
+    assert_eq!(generators.len(), i.next_power_of_two());
     let mut g_bold = vec![];
     let mut h_bold = vec![];
     for i in 0 .. i {
@@ -88,7 +88,7 @@ fn test_inner_product() {
       let mut transcript = Transcript::new([0; 32]);
       IpStatement::<Ristretto>::new(
         generators,
-        ScalarVector(vec![<Ristretto as Ciphersuite>::F::ONE; i]),
+        ScalarVector(vec![<Ristretto as Ciphersuite>::F::ONE; i.next_power_of_two()]),
         <Ristretto as Ciphersuite>::F::ONE,
         P::Prover(P),
       )
@@ -101,7 +101,7 @@ fn test_inner_product() {
     verifier.additional.push((<Ristretto as Ciphersuite>::F::ONE, P));
     IpStatement::<Ristretto>::new(
       generators,
-      ScalarVector(vec![<Ristretto as Ciphersuite>::F::ONE; i]),
+      ScalarVector(vec![<Ristretto as Ciphersuite>::F::ONE; i.next_power_of_two()]),
       <Ristretto as Ciphersuite>::F::ONE,
       P::Verifier { verifier_weight: <Ristretto as Ciphersuite>::F::ONE },
     )

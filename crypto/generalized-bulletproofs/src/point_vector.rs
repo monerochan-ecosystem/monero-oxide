@@ -86,7 +86,6 @@ impl<C: Ciphersuite> PointVector<C> {
 
   #[cfg(test)]
   pub(crate) fn multiexp(&self, vector: &crate::ScalarVector<C::F>) -> C::G {
-    debug_assert_eq!(self.len(), vector.len());
     let mut res = Vec::with_capacity(self.len());
     for (point, scalar) in self.0.iter().copied().zip(vector.0.iter().copied()) {
       res.push((scalar, point));

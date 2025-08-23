@@ -7,7 +7,7 @@ use ciphersuite::{
 };
 
 #[rustfmt::skip]
-use crate::{ScalarVector, PointVector, ProofGenerators, BatchVerifier, transcript::*, padded_pow_of_2};
+use crate::{ScalarVector, PointVector, ProofGenerators, BatchVerifier, transcript::*};
 
 /// An error from proving/verifying Inner-Product statements.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -58,20 +58,10 @@ impl<C: Ciphersuite> IpWitness<C> {
   /// If the witness is less than a power of two, it is padded to the nearest power of two.
   ///
   /// This functions return None if the lengths of a, b are mismatched or either are empty.
-  pub(crate) fn new(mut a: ScalarVector<C::F>, mut b: ScalarVector<C::F>) -> Option<Self> {
+  pub(crate) fn new(a: ScalarVector<C::F>, b: ScalarVector<C::F>) -> Option<Self> {
     if a.0.is_empty() || (a.len() != b.len()) {
       None?;
     }
-
-    // Pad to the nearest power of 2
-    let missing = padded_pow_of_2(a.len()) - a.len();
-    a.0.reserve(missing);
-    b.0.reserve(missing);
-    for _ in 0 .. missing {
-      a.0.push(C::F::ZERO);
-      b.0.push(C::F::ZERO);
-    }
-
     Some(Self { a, b })
   }
 }
@@ -110,7 +100,7 @@ where
       let u = generators.g() * u;
 
       // Ensure we have the exact amount of generators
-      if generators.g_bold_slice().len() != witness.a.len() {
+      if generators.g_bold_slice().len() != witness.a.len().next_power_of_two() {
         Err(IpError::IncorrectAmountOfGenerators)?;
       }
       // Acquire a local copy of the generators
@@ -144,8 +134,9 @@ where
     // This interprets `g_bold.len()` as `n`
     while g_bold.len() > 1 {
       // Split a, b, g_bold, h_bold as needed for lines 20-24
-      let (a1, a2) = a.clone().split();
-      let (b1, b2) = b.clone().split();
+      let split_at = a.len().next_power_of_two() / 2;
+      let (a1, a2) = a.split(split_at);
+      let (b1, b2) = b.split(split_at);
 
       let (g_bold1, g_bold2) = g_bold.split();
       let (h_bold1, h_bold2) = h_bold.split();
@@ -154,16 +145,14 @@ where
 
       // Sanity
       debug_assert_eq!(a1.len(), n_hat);
-      debug_assert_eq!(a2.len(), n_hat);
       debug_assert_eq!(b1.len(), n_hat);
-      debug_assert_eq!(b2.len(), n_hat);
       debug_assert_eq!(g_bold1.len(), n_hat);
       debug_assert_eq!(g_bold2.len(), n_hat);
       debug_assert_eq!(h_bold1.len(), n_hat);
       debug_assert_eq!(h_bold2.len(), n_hat);
 
       // cl, cr, lines 21-22
-      let cl = a1.inner_product(b2.0.iter());
+      let cl = b2.inner_product(a1.0.iter());
       let cr = a2.inner_product(b1.0.iter());
 
       let L = {
@@ -209,8 +198,16 @@ where
       P = (L * (x * x)) + P + (R * (x_inv * x_inv));
 
       // 32-34
-      a = (a1 * x) + &(a2 * x_inv);
-      b = (b1 * x_inv) + &(b2 * x);
+      a = a1 * x;
+      let a2 = a2 * x_inv;
+      for (a, a2) in a.0.iter_mut().zip(a2.0.iter()) {
+        *a += a2;
+      }
+      b = b1 * x_inv;
+      let b2 = b2 * x;
+      for (b, b2) in b.0.iter_mut().zip(b2.0.iter()) {
+        *b += b2;
+      }
     }
 
     // `if n = 1` case from line 14-17

@@ -197,14 +197,9 @@ where
     let c = self.c();
     let m = self.m();
 
-    // Check the witness length and pad it to the necessary power of two
+    // Check the witness length
     if witness.aL.len() > n {
       Err(AcError::NotEnoughGenerators)?;
-    }
-    while witness.aL.len() < n {
-      witness.aL.0.push(C::F::ZERO);
-      witness.aR.0.push(C::F::ZERO);
-      witness.aO.0.push(C::F::ZERO);
     }
     for c in &mut witness.c {
       if c.g_values.len() > n {
@@ -234,9 +229,29 @@ where
         let eval = constraint
           .WL
           .iter()
-          .map(|(i, weight)| *weight * witness.aL[*i])
-          .chain(constraint.WR.iter().map(|(i, weight)| *weight * witness.aR[*i]))
-          .chain(constraint.WO.iter().map(|(i, weight)| *weight * witness.aO[*i]))
+          .map(
+            |(i, weight)| {
+              if let Some(value) = witness.aL.0.get(*i) {
+                *weight * *value
+              } else {
+                C::F::ZERO
+              }
+            },
+          )
+          .chain(constraint.WR.iter().map(|(i, weight)| {
+            if let Some(value) = witness.aR.0.get(*i) {
+              *weight * *value
+            } else {
+              C::F::ZERO
+            }
+          }))
+          .chain(constraint.WO.iter().map(|(i, weight)| {
+            if let Some(value) = witness.aO.0.get(*i) {
+              *weight * *value
+            } else {
+              C::F::ZERO
+            }
+          }))
           .chain(constraint.WCG.iter().zip(&witness.c).flat_map(|(weights, c)| {
             weights.iter().map(|(j, weight)| {
               if let Some(value) = c.g_values.0.get(*j) {
@@ -345,10 +360,16 @@ where
       accumulate_vector(&mut o_weights, &constraint.WO, *z);
     }
 
-    l[ilr] = (r_weights * &y_inv) + &witness.aL;
+    l[ilr] = r_weights * &y_inv;
+    for (dest, src) in l[ilr].0.iter_mut().zip(&witness.aL.0) {
+      *dest += src;
+    }
     l[io] = witness.aO.clone();
     l[is] = sL;
-    r[jlr] = l_weights + &(witness.aR.clone() * &y);
+    r[jlr] = l_weights;
+    for (dest, (src_a, src_b)) in r[jlr].0.iter_mut().zip(witness.aR.0.iter().zip(&y.0)) {
+      *dest += *src_a * *src_b;
+    }
     r[jo] = o_weights - &y;
     r[js] = sR * &y;
 
