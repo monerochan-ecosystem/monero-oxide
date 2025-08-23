@@ -8,16 +8,16 @@ use zeroize::Zeroize;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 use ff::Field;
 
+use crate::DivisorCurve;
+
 /// Point for which batch conversion to Weierstrass (X,Y) is cheap.
 /// May and should be trivial for most curves.
 /// Curve params are provided in case they are not available as constants.
 pub trait XyPoint<F: Field>:
-  Sized + Clone + Copy + ConditionallySelectable + Neg<Output = Self> + ConstantTimeEq + Zeroize
+  Sized + Clone + Copy + Neg<Output = Self> + Zeroize + ConstantTimeEq + ConditionallySelectable
 {
   /// The identity.
   const IDENTITY: Self;
-  /// Create from affine point.
-  fn from_affine(x: F, y: F) -> Self;
   /// Add.
   fn add(x1: Self, x2: Self, curve: &Curve<F>) -> Self;
   /// Double.
@@ -85,6 +85,13 @@ impl<F: Field> ConditionallySelectable for Projective<F> {
   }
 }
 
+impl<C: DivisorCurve> From<C> for Projective<C::FieldElement> {
+  fn from(point: C) -> Self {
+    let Some((x, y)) = C::to_xy(point) else { return Self::IDENTITY };
+    Self { x, y, z: C::FieldElement::ONE }
+  }
+}
+
 /// Curve params x^3 + ax + b
 pub struct Curve<F> {
   /// A in x^3 + Ax + B
@@ -95,11 +102,6 @@ pub struct Curve<F> {
 
 impl<F: Field + Zeroize> XyPoint<F> for Projective<F> {
   const IDENTITY: Self = Projective { x: F::ZERO, y: F::ONE, z: F::ZERO };
-
-  fn from_affine(x: F, y: F) -> Self {
-    let z = F::ONE;
-    Self { x, y, z }
-  }
 
   // based on 13.2.1.b of https://hyperelliptic.org/HEHCC
   fn add(x1: Self, x2: Self, curve: &Curve<F>) -> Self {
@@ -146,20 +148,11 @@ impl<F: Field + Zeroize> XyPoint<F> for Projective<F> {
     let mut z = points.iter().map(|p| p.z).collect::<Vec<F>>();
     let mut scratch_space = vec![F::ZERO; z.len()];
     ff::BatchInverter::invert_with_external_scratch(&mut z, &mut scratch_space);
-    points
-      .into_iter()
-      .zip(z)
-      .map(|(p, z_inv)| {
-        let (x, y, _) = p.coordinates();
-        (x * z_inv, y * z_inv)
-      })
-      .collect()
+    points.into_iter().zip(z).map(|(p, z_inv)| (p.x * z_inv, p.y * z_inv)).collect()
   }
 
   fn is_identity(&self) -> Choice {
-    let x = self.x.ct_eq(&F::ZERO);
-    let z = self.z.ct_eq(&F::ZERO);
-    x & z
+    self.z.ct_eq(&F::ZERO)
   }
 }
 
@@ -180,9 +173,7 @@ mod ed25519_test {
     let to_xy = |p| EdwardsPoint::to_xy(p).unwrap();
 
     let point = EdwardsPoint::generator();
-    // println!("P = {:?}", to_xy(point));
-    let (x, y) = to_xy(point);
-    let projective = Projective::from_affine(x, y);
+    let projective = Projective::from(point);
     assert_eq!(projective.to_affine_slow(), to_xy(point));
     // println!("P = {:?}", projective.to_affine_slow());
 

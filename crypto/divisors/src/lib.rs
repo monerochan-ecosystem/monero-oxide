@@ -4,10 +4,13 @@
 #![deny(missing_docs)]
 #![allow(non_snake_case)]
 
+#[allow(unused_imports)]
+use std_shims::prelude::*;
 use std_shims::{vec, vec::Vec};
 
-use zeroize::{Zeroize, ZeroizeOnDrop};
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, ConstantTimeGreater, CtOption};
+use zeroize::{Zeroize, ZeroizeOnDrop};
+
 use group::{
   ff::{Field, PrimeField, PrimeFieldBits},
   Group,
@@ -34,7 +37,7 @@ pub trait DivisorCurve: Group + ConstantTimeEq + ConditionallySelectable + Zeroi
   type FieldElement: Zeroize + PrimeField + ConditionallySelectable;
   /// Alternative point representation for models where `DivisorCurve::to_xy` is expensive.
   /// In most cases, `Self` will be enough. Most of the rest can use `ec::Projective`.
-  type XyPoint: XyPoint<Self::FieldElement>;
+  type XyPoint: XyPoint<Self::FieldElement> + From<Self>;
 
   /// The A in the curve equation y^2 = x^3 + A x + B.
   fn a() -> Self::FieldElement;
@@ -262,9 +265,7 @@ fn lines_and_denoms<C: DivisorCurve>(
     pairs
   };
 
-  let gen = C::generator();
-  let gen = C::to_xy(gen).unwrap();
-  let gen = C::XyPoint::from_affine(gen.0, gen.1);
+  let gen = C::XyPoint::from(C::generator());
   let a: Vec<C::XyPoint> = pairs
     .iter()
     .map(|[a, _]| {
@@ -610,8 +611,7 @@ impl<F: Zeroize + PrimeFieldBits> ScalarDecomposition<F> {
   where
     C: DivisorCurve<Scalar = F>,
   {
-    let (x, y) = C::to_xy(p).unwrap();
-    C::XyPoint::from_affine(x, y)
+    C::XyPoint::from(p)
   }
 
   /// A divisor to prove a scalar multiplication.

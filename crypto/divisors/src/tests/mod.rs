@@ -6,19 +6,12 @@ use group::{
 };
 use dalek_ff_group::EdwardsPoint;
 
-use crate::{XyPoint, DivisorCurve, Poly, new_divisor};
+use crate::{DivisorCurve, Poly, new_divisor};
 
 mod poly;
 
 fn points_xy<C: DivisorCurve>(points: &[C]) -> Vec<C::XyPoint> {
-  points
-    .iter()
-    .copied()
-    .map(|p| {
-      let (x, y) = C::to_xy(p).unwrap();
-      C::XyPoint::from_affine(x, y)
-    })
-    .collect()
+  points.iter().copied().map(C::XyPoint::from).collect()
 }
 
 // Equation 4 in the security proofs
