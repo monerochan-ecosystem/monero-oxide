@@ -109,8 +109,12 @@ impl<F: PrimeField> ScalarVector<F> {
     ScalarVector(res)
   }
 
+  /// If the scalar vector is empty.
+  pub fn is_empty(&self) -> bool {
+    self.0.is_empty()
+  }
+
   /// The length of this scalar vector.
-  #[allow(clippy::len_without_is_empty)]
   pub fn len(&self) -> usize {
     self.0.len()
   }

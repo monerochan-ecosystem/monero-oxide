@@ -353,20 +353,6 @@ where
     r[jo] = o_weights - &y;
     r[js] = sR * &y;
 
-    // Pad as expected
-    for l in &mut l {
-      debug_assert!((l.len() == 0) || (l.len() == n));
-      if l.len() == 0 {
-        *l = ScalarVector::new(n);
-      }
-    }
-    for r in &mut r {
-      debug_assert!((r.len() == 0) || (r.len() == n));
-      if r.len() == 0 {
-        *r = ScalarVector::new(n);
-      }
-    }
-
     // We now fill in the vector commitments
     // We use unused coefficients of l increasing from 0 (skipping ilr), and unused coefficients of
     // r decreasing from n' (skipping jlr)
@@ -398,7 +384,9 @@ where
     for (i, l) in l.iter().enumerate() {
       for (j, r) in r.iter().enumerate() {
         let new_coeff = i + j;
-        t[new_coeff] += l.inner_product(r.0.iter());
+        if !(l.is_empty() || r.is_empty()) {
+          t[new_coeff] += l.inner_product(r.0.iter());
+        };
       }
     }
 
@@ -426,8 +414,11 @@ where
     let x: ScalarVector<C::F> = ScalarVector::powers(transcript.challenge::<C>(), t.len());
 
     let poly_eval = |poly: &[ScalarVector<C::F>], x: &ScalarVector<_>| -> ScalarVector<_> {
-      let mut res = ScalarVector::<C::F>::new(poly[0].0.len());
+      let mut res = ScalarVector::<C::F>::new(n);
       for (i, coeff) in poly.iter().enumerate() {
+        if coeff.is_empty() {
+          continue;
+        }
         res = res + &(coeff.clone() * x[i]);
       }
       res
@@ -445,7 +436,7 @@ where
     }
 
     let tau_x = {
-      let mut tau_x_poly = vec![];
+      let mut tau_x_poly = Vec::with_capacity(t.len());
       tau_x_poly.extend(tau_before_ni);
       tau_x_poly.push(V_weights.inner_product(witness.v.iter().map(|v| &v.mask)));
       tau_x_poly.extend(tau_after_ni);
