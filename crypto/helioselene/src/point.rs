@@ -412,6 +412,15 @@ macro_rules! curve {
 
     impl ec_divisors::DivisorCurve for $Point {
       type FieldElement = $Field;
+      type XyPoint = ec_divisors::Projective<$Field>;
+
+      fn precomputation_for_degree_of_num_bits() -> ec_divisors::Precomp<Self::FieldElement> {
+        static PRECOMPUTE: std_shims::sync::LazyLock<ec_divisors::Precomp<$Field>> =
+          std_shims::sync::LazyLock::new(|| {
+            ec_divisors::Precomp::new(usize::try_from($Scalar::NUM_BITS).unwrap())
+          });
+        (*PRECOMPUTE).clone()
+      }
 
       fn a() -> Self::FieldElement {
         -$Field::from(3u64)

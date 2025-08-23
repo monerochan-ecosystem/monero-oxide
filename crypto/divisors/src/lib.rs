@@ -4,21 +4,23 @@
 #![deny(missing_docs)]
 #![allow(non_snake_case)]
 
-use barycentric::Interpolator;
-use divisor::{Divisor, SmallDivisor};
 use std_shims::{vec, vec::Vec};
-use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, ConstantTimeGreater, CtOption};
-use zeroize::{Zeroize, ZeroizeOnDrop};
-mod barycentric;
-mod divisor;
-mod ec;
-mod sizes;
 
-pub use ec::{Curve, Projective, XyPoint};
+use zeroize::{Zeroize, ZeroizeOnDrop};
+use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, ConstantTimeGreater, CtOption};
 use group::{
   ff::{Field, PrimeField, PrimeFieldBits},
   Group,
 };
+
+mod barycentric;
+use barycentric::Interpolator;
+
+mod divisor;
+use divisor::{Divisor, SmallDivisor};
+
+mod ec;
+pub use ec::{Curve, Projective, XyPoint};
 
 mod poly;
 pub use poly::Poly;
@@ -39,14 +41,8 @@ pub trait DivisorCurve: Group + ConstantTimeEq + ConditionallySelectable + Zeroi
   /// The B in the curve equation y^2 = x^3 + A x + B.
   fn b() -> Self::FieldElement;
 
-  /// Precomputes necessary values for optimal interpolation.
-  #[allow(non_snake_case)]
-  fn PRECOMPUTE() -> Precomp<Self::FieldElement>;
-
-  /// Provides the curve params, same as calling `Self::a` and `Self::b`.
-  fn curve() -> Curve<Self::FieldElement> {
-    Curve { a: Self::a(), b: Self::b() }
-  }
+  /// Precompute of constants needed for interpolation.
+  fn precomputation_for_degree_of_num_bits() -> Precomp<Self::FieldElement>;
 
   /// y^2 - x^3 - A x - B
   ///
@@ -81,7 +77,7 @@ pub trait DivisorCurve: Group + ConstantTimeEq + ConditionallySelectable + Zeroi
   /// Like `to_xy`, but it may assume no point is the identity, which
   /// must be ensured by the caller.
   fn to_xy_batched(points: &[Self]) -> Vec<[Self::FieldElement; 2]> {
-    points.iter().cloned().map(Self::to_xy).map(Option::unwrap).map(|(x, y)| [x, y]).collect()
+    points.iter().copied().map(Self::to_xy).map(Option::unwrap).map(|(x, y)| [x, y]).collect()
   }
 }
 
@@ -339,15 +335,16 @@ fn lines_and_denoms<C: DivisorCurve>(
 #[allow(clippy::new_ret_no_self)]
 pub fn new_divisor<C: DivisorCurve>(
   points: &[C::XyPoint],
-  interpolaror: &Interpolator<C::FieldElement>,
-  curve: &Curve<C::FieldElement>,
+  interpolator: &Interpolator<C::FieldElement>,
 ) -> Option<Poly<C::FieldElement>> {
+  let curve = Curve { a: C::a(), b: C::b() };
+
   // No points were passed in, this is the point at infinity, or the single point isn't infinity
   // and accordingly doesn't sum to infinity. All three cause us to return None
   // Checks a bit other than the first bit is set, meaning this is >= 2
   let mut invalid_args = (points.len() & (!1)).ct_eq(&0);
   // The points don't sum to the point at infinity
-  let sum = points.iter().cloned().reduce(|a, b| C::XyPoint::add(a, b, curve)).unwrap();
+  let sum = points.iter().copied().reduce(|a, b| C::XyPoint::add(a, b, &curve)).unwrap();
   assert!(bool::from(sum.is_identity()));
   invalid_args |= !sum.is_identity();
   // A point was the point at identity
@@ -358,10 +355,10 @@ pub fn new_divisor<C: DivisorCurve>(
     None?;
   }
 
-  let mut all_lines = lines_and_denoms::<C>(points, curve).into_iter();
+  let mut all_lines = lines_and_denoms::<C>(points, &curve).into_iter();
   let points_len = points.len();
 
-  let modulus = Divisor::compute_modulus(C::a(), C::b(), EVALS);
+  let modulus = Divisor::compute_modulus(C::a(), C::b(), interpolator.degree() + 1);
   // Create the initial set of divisors
   let mut divs = vec![];
 
@@ -420,13 +417,10 @@ pub fn new_divisor<C: DivisorCurve>(
 
   // Return the unified divisor
   let divisor = divs.remove(0);
-  let mut divisor = divisor_to_poly::<C>(divisor, interpolaror);
+  let mut divisor = divisor_to_poly::<C>(divisor, interpolator);
   trim(&mut divisor, points_len);
   Some(divisor)
 }
-
-/// N necessary values for optimal interpolation which should be ideal for most curves
-pub const EVALS: usize = 130;
 
 /// Convert divisor from univariate to bivariate representation.
 pub fn divisor_to_poly<C: DivisorCurve>(
@@ -649,8 +643,9 @@ impl<F: Zeroize + PrimeFieldBits> ScalarDecomposition<F> {
     let mut write_above: u64 = 0;
     for coefficient in &self.decomposition {
       // Write the generator to every slot except the slots we have already written to.
-      for i in 1 ..= (<C::Scalar as PrimeField>::NUM_BITS as u64) {
-        divisor_points[i as usize].conditional_assign(&generator, i.ct_gt(&write_above));
+      for i in 1 ..= u64::from(<C::Scalar as PrimeField>::NUM_BITS) {
+        divisor_points[usize::try_from(i).unwrap()]
+          .conditional_assign(&generator, i.ct_gt(&write_above));
       }
 
       // Increase the next write start by the coefficient.
@@ -658,13 +653,11 @@ impl<F: Zeroize + PrimeFieldBits> ScalarDecomposition<F> {
       generator = generator.double(&curve);
     }
 
-    // Here we may want to construct one based on the number of points.
-    // Currently set tot `EVALS` which should be ideal for most curves and
-    // scalars.
-    let interpolator = C::PRECOMPUTE();
+    // The degree of the the created polynomials will be less than NUM_BITS
+    let interpolator = C::precomputation_for_degree_of_num_bits();
 
     // Create a divisor out of the points
-    let res = new_divisor::<C>(&divisor_points, &interpolator, &curve).unwrap();
+    let res = new_divisor::<C>(&divisor_points, &interpolator).unwrap();
     divisor_points.zeroize();
     res
   }
@@ -672,16 +665,17 @@ impl<F: Zeroize + PrimeFieldBits> ScalarDecomposition<F> {
 
 #[cfg(any(test, feature = "ed25519"))]
 mod ed25519 {
-  use crate::{Projective, Precomp, Interpolator, EVALS};
-  use dalek_ff_group::{EdwardsPoint, FieldElement};
+  use std_shims::sync::LazyLock;
+
+  use subtle::{Choice, ConditionallySelectable};
   use group::{
     ff::{Field, PrimeField},
     Group, GroupEncoding,
   };
-  use subtle::{Choice, ConditionallySelectable};
-  use std_shims::sync::OnceLock;
 
-  static PRECOMPUTE_CELL: OnceLock<Precomp<FieldElement>> = OnceLock::new();
+  use dalek_ff_group::{Scalar, FieldElement, EdwardsPoint};
+
+  use crate::{Projective, Precomp, Interpolator};
 
   impl crate::DivisorCurve for EdwardsPoint {
     type FieldElement = FieldElement;
@@ -705,8 +699,10 @@ mod ed25519 {
       Self::FieldElement::from_repr(le_bytes.try_into().unwrap()).unwrap()
     }
 
-    fn PRECOMPUTE() -> Precomp<Self::FieldElement> {
-      PRECOMPUTE_CELL.get_or_init(|| Interpolator::new(EVALS - 1)).clone()
+    fn precomputation_for_degree_of_num_bits() -> Precomp<Self::FieldElement> {
+      static PRECOMPUTE: LazyLock<Precomp<FieldElement>> =
+        LazyLock::new(|| Interpolator::new(usize::try_from(Scalar::NUM_BITS).unwrap()));
+      (*PRECOMPUTE).clone()
     }
 
     // https://www.ietf.org/archive/id/draft-ietf-lwig-curve-representations-02.pdf E.2

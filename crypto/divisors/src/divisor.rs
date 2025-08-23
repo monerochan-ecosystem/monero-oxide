@@ -1,9 +1,10 @@
-use crate::barycentric::Interpolator;
 use core::ops::{Div, Mul};
-use ff::PrimeField;
-use std_shims::alloc::rc::Rc;
-use std_shims::{vec, vec::Vec};
+use std_shims::{alloc::rc::Rc, vec, vec::Vec};
+
 use subtle::{ConditionallySelectable, CtOption};
+use ff::PrimeField;
+
+use crate::barycentric::Interpolator;
 
 /// Divisor of form f(x,y) = A(x) - yB(x), with A and B
 /// represented as enough evaluations for their degree.

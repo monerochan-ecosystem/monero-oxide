@@ -2,10 +2,11 @@
 //! based on projective arithmetic.
 
 use core::ops::Neg;
-use ff::Field;
 use std_shims::vec::Vec;
-use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
+
 use zeroize::Zeroize;
+use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
+use ff::Field;
 
 /// Point for which batch conversion to Weierstrass (X,Y) is cheap.
 /// May and should be trivial for most curves.
@@ -164,12 +165,12 @@ impl<F: Field + Zeroize> XyPoint<F> for Projective<F> {
 
 #[cfg(test)]
 mod ed25519_test {
+  use group::Group;
+  use dalek_ff_group::EdwardsPoint;
   use crate::{
     ec::{Curve, Projective, XyPoint},
     DivisorCurve,
   };
-  use dalek_ff_group::EdwardsPoint;
-  use group::Group;
 
   #[test]
   fn projective() {

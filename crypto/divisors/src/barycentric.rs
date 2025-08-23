@@ -1,9 +1,10 @@
 //! Barycentric evaluation
 
 use core::{iter::successors, ops::AddAssign};
-use ff::{Field, PrimeField};
 use std_shims::{vec, vec::Vec};
+
 use subtle::CtOption;
+use ff::{Field, PrimeField};
 
 pub struct Weights<F: Field> {
   weights: Vec<F>,
@@ -45,7 +46,7 @@ impl<F: Field> Coeffs<F> {
   }
 
   fn scale_in_place(&mut self, scalar: F) {
-    for coeff in self.0.iter_mut() {
+    for coeff in &mut self.0 {
       coeff.mul_assign(scalar);
     }
   }
@@ -125,13 +126,13 @@ fn synthetic_div() {
   let poly: Vec<Scalar> = coeffs.into_iter().map(Scalar::from).collect();
   let poly = Coeffs(poly);
 
-  println!("poly: {:#?}", poly);
+  println!("poly: {poly:#?}");
   let c = Scalar::from(432u64);
   let (mut quot, rest) = poly.synthetic_division(c);
   quot.simple_mul(c);
   quot.0[0] += rest;
   let poly = quot;
-  println!("poly: {:#?}", poly);
+  println!("poly: {poly:#?}");
 }
 
 #[test]
@@ -151,7 +152,7 @@ fn interpolation() {
   for i in 0 .. 5 {
     let li = weights.li(&l, i);
     let li_eval = li.eval(Scalar::from(i as u64));
-    println!("L_{}({}): {:?}", i, i, li_eval);
+    println!("L_{i}({i}): {li_eval:?}");
     let e = coeffs.eval(Scalar::from(i as u64));
     evals2.push(e);
   }
@@ -178,6 +179,10 @@ impl<F: PrimeField> Interpolator<F> {
       lagrange_polys.push(li);
     }
     Self { degree, lagrange_polys }
+  }
+
+  pub(crate) fn degree(&self) -> usize {
+    self.degree
   }
 
   pub fn interpolate(&self, mut evals: Vec<F>) -> Coeffs<F> {
