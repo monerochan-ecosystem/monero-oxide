@@ -4,6 +4,7 @@
 #![deny(missing_docs)]
 #![allow(non_snake_case)]
 
+use core::ops::Add;
 #[allow(unused_imports)]
 use std_shims::prelude::*;
 use std_shims::{vec, vec::Vec};
@@ -23,7 +24,7 @@ mod divisor;
 use divisor::{Divisor, SmallDivisor};
 
 mod ec;
-pub use ec::{Curve, Projective, XyPoint};
+pub use ec::{Projective, XyPoint};
 
 mod poly;
 pub use poly::Poly;
@@ -71,17 +72,12 @@ pub trait DivisorCurve: Group + ConstantTimeEq + ConditionallySelectable + Zeroi
     }
   }
 
-  /// Convert a point to its x and y coordinates.
+  /// Convert a point to its affine coordinates.
   ///
   /// Returns None if passed the point at infinity.
   ///
   /// This function may run in time variable to if the point is the identity.
   fn to_xy(point: Self) -> Option<(Self::FieldElement, Self::FieldElement)>;
-  /// Like `to_xy`, but it may assume no point is the identity, which
-  /// must be ensured by the caller.
-  fn to_xy_batched(points: &[Self]) -> Vec<[Self::FieldElement; 2]> {
-    points.iter().copied().map(Self::to_xy).map(Option::unwrap).map(|(x, y)| [x, y]).collect()
-  }
 }
 
 /// Calculate the slope and intercept between two points.
@@ -114,10 +110,10 @@ struct Denom<C: DivisorCurve> {
 /// Returns a.x and b.x too needed to build denominators laters.
 fn slopes_and_denoms<C: DivisorCurve>(
   a: Vec<Xy<C>>,
-  b: Vec<C::XyPoint>,
+  b: &[C::XyPoint],
 ) -> Vec<[C::FieldElement; 2]> {
   assert_eq!(a.len(), b.len());
-  let b: Vec<Xy<C>> = C::XyPoint::to_xy_batched(b);
+  let b: Vec<Xy<C>> = C::XyPoint::batch_to_xy(b);
   let mut diffs: Vec<C::FieldElement> = a
     .iter()
     .zip(b.iter())
@@ -171,7 +167,6 @@ fn line_args<C: DivisorCurve>(
   a_x: C::FieldElement,
   b_x: C::FieldElement,
   gen: &C::XyPoint,
-  curve: &Curve<C::FieldElement>,
 ) -> LineArgs<C> {
   let a_is_identity = a.is_identity();
   let b_is_identity = b.is_identity();
@@ -192,8 +187,8 @@ fn line_args<C: DivisorCurve>(
 
   let a = <_>::conditional_select(&a, gen, a_is_identity);
   let b = <_>::conditional_select(&b, gen, b_is_identity);
-  let b = <_>::conditional_select(&b, &a.double(curve), additive_inverses);
-  let b = <_>::conditional_select(&b, &-a.double(curve), a.ct_eq(&b));
+  let b = <_>::conditional_select(&b, &a.double(), additive_inverses);
+  let b = <_>::conditional_select(&b, &-a.double(), a.ct_eq(&b));
 
   let identity_or_inverse =
     (one_is_identity_or_additive_inverses, if_one_is_identity_or_additive_inverses);
@@ -230,7 +225,6 @@ fn finish_line<F: PrimeField>(
 /// Computes all lines, batching expensive operations.
 fn lines_and_denoms<C: DivisorCurve>(
   points: &[C::XyPoint],
-  curve: &Curve<C::FieldElement>,
 ) -> Vec<(SmallDivisor<C::FieldElement>, Denom<C>)> {
   // all the pairs of points from which lines will be created.
   let pairs: Vec<[C::XyPoint; 2]> = {
@@ -242,7 +236,7 @@ fn lines_and_denoms<C: DivisorCurve>(
       let b = iter.next();
       pairs.push([a, b.unwrap_or(-a)]);
       let div = match b {
-        Some(b) => C::XyPoint::add(a, b, curve),
+        Some(b) => a + b,
         None => a,
       };
       divs.push(div);
@@ -258,7 +252,7 @@ fn lines_and_denoms<C: DivisorCurve>(
       while let Some(a) = divs.pop() {
         let b = divs.pop().unwrap();
         pairs.push([a, b]);
-        next_divs.push(C::XyPoint::add(a, b, curve));
+        next_divs.push(a + b);
       }
       divs = next_divs;
     }
@@ -286,10 +280,10 @@ fn lines_and_denoms<C: DivisorCurve>(
   // `slopes_and_denoms` expects the "a" and "b" from `line_args`,
   // but a remains the same as this. As such, it can be reused
   // and doesn't need to be in the output of `line_args`
-  let a_xy: Vec<Xy<C>> = C::XyPoint::to_xy_batched(a.clone());
+  let a_xy: Vec<Xy<C>> = C::XyPoint::batch_to_xy(&a);
   // This one may change, and as such it is only used as an input for
   // `line_args`.
-  let b_xy: Vec<Xy<C>> = C::XyPoint::to_xy_batched(b);
+  let b_xy: Vec<Xy<C>> = C::XyPoint::batch_to_xy(&b);
 
   let (line_args_and_denom, b): (Vec<_>, Vec<C::XyPoint>) = pairs
     .into_iter()
@@ -302,7 +296,7 @@ fn lines_and_denoms<C: DivisorCurve>(
       let bx = CtOption::new(b_x, !pair[1].is_identity());
       let denom = Denom { ax, bx };
       let [a, b] = pair;
-      let args: LineArgs<C> = line_args(a, b, *a_x, b_x, &gen, curve);
+      let args: LineArgs<C> = line_args(a, b, *a_x, b_x, &gen);
       // a is the same we have, this one can be discarded.
       let LineArgs { b, both_are_identity, identity_or_inverse } = args;
       let args = (both_are_identity, identity_or_inverse);
@@ -310,7 +304,7 @@ fn lines_and_denoms<C: DivisorCurve>(
     })
     .unzip();
 
-  let slopes = slopes_and_denoms::<C>(a_xy, b);
+  let slopes = slopes_and_denoms::<C>(a_xy, &b);
 
   line_args_and_denom
     .into_iter()
@@ -338,14 +332,12 @@ pub fn new_divisor<C: DivisorCurve>(
   points: &[C::XyPoint],
   interpolator: &Interpolator<C::FieldElement>,
 ) -> Option<Poly<C::FieldElement>> {
-  let curve = Curve { a: C::a(), b: C::b() };
-
   // No points were passed in, this is the point at infinity, or the single point isn't infinity
   // and accordingly doesn't sum to infinity. All three cause us to return None
   // Checks a bit other than the first bit is set, meaning this is >= 2
   let mut invalid_args = (points.len() & (!1)).ct_eq(&0);
   // The points don't sum to the point at infinity
-  let sum = points.iter().copied().reduce(|a, b| C::XyPoint::add(a, b, &curve)).unwrap();
+  let sum = points.iter().copied().reduce(C::XyPoint::add).unwrap();
   assert!(bool::from(sum.is_identity()));
   invalid_args |= !sum.is_identity();
   // A point was the point at identity
@@ -356,7 +348,7 @@ pub fn new_divisor<C: DivisorCurve>(
     None?;
   }
 
-  let mut all_lines = lines_and_denoms::<C>(points, &curve).into_iter();
+  let mut all_lines = lines_and_denoms::<C>(points).into_iter();
   let points_len = points.len();
 
   let modulus = Divisor::compute_modulus(C::a(), C::b(), interpolator.degree() + 1);
@@ -637,8 +629,6 @@ impl<F: Zeroize + PrimeFieldBits> ScalarDecomposition<F> {
     divisor_points[0] = Self::to_xy(-generator * self.scalar);
     let mut generator = Self::to_xy(generator);
 
-    let curve = Curve { a: C::a(), b: C::b() };
-
     // Write the decomposition
     let mut write_above: u64 = 0;
     for coefficient in &self.decomposition {
@@ -650,7 +640,7 @@ impl<F: Zeroize + PrimeFieldBits> ScalarDecomposition<F> {
 
       // Increase the next write start by the coefficient.
       write_above += coefficient;
-      generator = generator.double(&curve);
+      generator = generator.double();
     }
 
     // The degree of the the created polynomials will be less than NUM_BITS
@@ -679,7 +669,7 @@ mod ed25519 {
 
   impl crate::DivisorCurve for EdwardsPoint {
     type FieldElement = FieldElement;
-    type XyPoint = Projective<FieldElement>;
+    type XyPoint = Projective<Self>;
 
     // Wei25519 a/b
     // https://www.ietf.org/archive/id/draft-ietf-lwig-curve-representations-02.pdf E.3
