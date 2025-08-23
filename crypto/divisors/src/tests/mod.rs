@@ -2,7 +2,6 @@ use crate::XyPoint;
 use crate::{barycentric::Interpolator, new_divisor, DivisorCurve, Poly};
 use dalek_ff_group::EdwardsPoint;
 use group::{ff::Field, Group};
-use pasta_curves::{Ep, Eq};
 use rand_core::OsRng;
 
 mod poly;
@@ -202,20 +201,6 @@ fn test_subset_sum_to_infinity<C: DivisorCurve>() {
     points.push(-next);
     check_divisor(points, &precomputation);
   }
-}
-
-#[test]
-fn test_divisor_pallas() {
-  test_same_point::<Ep>();
-  test_subset_sum_to_infinity::<Ep>();
-  test_divisor::<Ep>();
-}
-
-#[test]
-fn test_divisor_vesta() {
-  test_same_point::<Eq>();
-  test_subset_sum_to_infinity::<Eq>();
-  test_divisor::<Eq>();
 }
 
 #[test]

@@ -1,11 +1,10 @@
 use rand_core::OsRng;
 
 use group::ff::Field;
-use pasta_curves::Ep;
 
-use crate::{DivisorCurve, Poly};
+use crate::Poly;
 
-type F = <Ep as DivisorCurve>::FieldElement;
+type F = dalek_ff_group::Scalar;
 
 #[test]
 fn test_poly() {
@@ -100,8 +99,8 @@ fn test_differentation() {
       y_coefficients: vec![input.yx_coefficients[0][0]],
       yx_coefficients: vec![],
       x_coefficients: vec![
-        F::from(2) * input.x_coefficients[1],
-        F::from(3) * input.x_coefficients[2]
+        F::from(2u64) * input.x_coefficients[1],
+        F::from(3u64) * input.x_coefficients[2]
       ],
       zero_coefficient: input.x_coefficients[0],
     }
@@ -127,11 +126,11 @@ fn test_differentation() {
     diff_x,
     Poly {
       y_coefficients: vec![input.yx_coefficients[0][0]],
-      yx_coefficients: vec![vec![F::from(2) * input.yx_coefficients[0][1]]],
+      yx_coefficients: vec![vec![F::from(2u64) * input.yx_coefficients[0][1]]],
       x_coefficients: vec![
-        F::from(2) * input.x_coefficients[1],
-        F::from(3) * input.x_coefficients[2],
-        F::from(4) * input.x_coefficients[3],
+        F::from(2u64) * input.x_coefficients[1],
+        F::from(3u64) * input.x_coefficients[2],
+        F::from(4u64) * input.x_coefficients[3],
       ],
       zero_coefficient: input.x_coefficients[0],
     }
