@@ -14,7 +14,7 @@ use helioselene::{HeliosPoint, SelenePoint, Helios, Selene};
 use monero_io::{write_varint, decompress_point};
 
 mod hash_to_point;
-pub use hash_to_point::hash_to_point;
+pub use hash_to_point::biased_hash_to_point;
 
 #[cfg(test)]
 mod tests;
@@ -51,15 +51,15 @@ pub fn H_pow_2() -> &'static [EdwardsPoint; 64] {
 
 /// Monero's `T`, used to blind the key-image commitment present within output keys.
 pub static T: LazyLock<EdwardsPoint> =
-  LazyLock::new(|| hash_to_point(keccak256(b"Monero Generator T")));
+  LazyLock::new(|| biased_hash_to_point(keccak256(b"Monero Generator T")));
 
 /// FCMP++s's key-image generator blinding generator `U`.
 pub static FCMP_U: LazyLock<EdwardsPoint> =
-  LazyLock::new(|| hash_to_point(keccak256(b"Monero FCMP++ Generator U")));
+  LazyLock::new(|| biased_hash_to_point(keccak256(b"Monero FCMP++ Generator U")));
 
 /// FCMP++s's randomness commitment generator `V`.
 pub static FCMP_V: LazyLock<EdwardsPoint> =
-  LazyLock::new(|| hash_to_point(keccak256(b"Monero FCMP++ Generator V")));
+  LazyLock::new(|| biased_hash_to_point(keccak256(b"Monero FCMP++ Generator V")));
 
 /// The maximum amount of input tuples provable for within a single FCMP.
 // https://github.com/seraphis-migration/monero
@@ -79,8 +79,8 @@ pub const MAX_FCMP_INPUTS: usize = 128;
 //  /blob/8bf178a3009ee066001189d05869445bdf4ed28c/src/cryptonote_config.h#L222
 pub const MAX_FCMP_LAYERS: usize = 12;
 
-/// The maximum amount of commitments provable for within a single range proof.
-pub const MAX_COMMITMENTS: usize = 16;
+/// The maximum amount of commitments provable for within a single Bulletproof(+).
+pub const MAX_BULLETPROOF_COMMITMENTS: usize = 16;
 /// The amount of bits a value within a commitment may use.
 pub const COMMITMENT_BITS: usize = 64;
 
@@ -100,7 +100,7 @@ impl BulletproofGenerators {
   /// once-initialized static.
   pub fn new(dst: &'static [u8]) -> Self {
     // The maximum amount of bits used within a single range proof.
-    const MAX_MN: usize = MAX_COMMITMENTS * COMMITMENT_BITS;
+    const MAX_MN: usize = MAX_BULLETPROOF_COMMITMENTS * COMMITMENT_BITS;
 
     let mut preimage = H.compress().to_bytes().to_vec();
     preimage.extend(dst);
@@ -112,11 +112,11 @@ impl BulletproofGenerators {
 
       let mut even = preimage.clone();
       write_varint(&i, &mut even).expect("write failed but <Vec as io::Write> doesn't fail");
-      res.H.push(hash_to_point(keccak256(&even)));
+      res.H.push(biased_hash_to_point(keccak256(&even)));
 
       let mut odd = preimage.clone();
       write_varint(&(i + 1), &mut odd).expect("write failed but <Vec as io::Write> doesn't fail");
-      res.G.push(hash_to_point(keccak256(&odd)));
+      res.G.push(biased_hash_to_point(keccak256(&odd)));
     }
     res
   }
