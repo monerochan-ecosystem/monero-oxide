@@ -30,65 +30,91 @@ where
   use ciphersuite::group::{ff::PrimeField, GroupEncoding};
   use ec_divisors::DivisorCurve;
 
+  fn read_point(point: &str, x_str: &str, y_str: &str) -> String {
+    format!(
+      "
+        helioselene::{point}::from_xy(
+          <
+            <helioselene::{point} as ec_divisors::DivisorCurve>::FieldElement
+              as
+            ciphersuite::group::ff::PrimeField
+          >::from_repr({x_str}).expect(\"build script x wasn't reduced\"),
+          <
+            <helioselene::{point} as ec_divisors::DivisorCurve>::FieldElement
+              as
+            ciphersuite::group::ff::PrimeField
+          >::from_repr({y_str}).expect(\"build script y wasn't reduced\"),
+        ).expect(\"generator from build script wasn't on-curve\")
+      "
+    )
+  }
+
   fn serialize<G: GroupEncoding<Repr = [u8; 32]> + DivisorCurve>(
-    generators_string: &mut String,
     point: &str,
-    points: &[G],
-  ) {
-    for generator in points {
-      let (x, y) = G::to_xy(*generator).expect("generator was the identity?");
-      generators_string.extend(
-        format!(
-          "
-            helioselene::{point}::from_xy(
-              <
-                <helioselene::{point} as ec_divisors::DivisorCurve>::FieldElement
-                  as
-                ciphersuite::group::ff::PrimeField
-              >::from_repr({:?}).expect(\"build script x wasn't reduced\"),
-              <
-                <helioselene::{point} as ec_divisors::DivisorCurve>::FieldElement
-                  as
-                ciphersuite::group::ff::PrimeField
-              >::from_repr({:?}).expect(\"build script y wasn't reduced\"),
-            ).expect(\"generator from build script wasn't on-curve\"),
-          ",
-          x.to_repr().as_ref(),
-          y.to_repr().as_ref()
-        )
-        .chars(),
-      );
-    }
+    generator: G,
+  ) -> String {
+    let (x, y) = G::to_xy(generator).expect("generator was the identity?");
+    read_point(
+      point,
+      &format!("{:?}", x.to_repr().as_ref()),
+      &format!("{:?}", y.to_repr().as_ref()),
+    )
   }
 
   let id =
     String::from_utf8(C::ID.to_vec()).expect("Helios/Selene Ciphersuite ID wasn't valid UTF-8");
   let point = format!("{id}Point");
-  let path = format!("{}_generators.rs", id.clone().to_lowercase());
+  let path = format!("{}_generators", id.clone().to_lowercase());
+  let g_bold_path = path.clone() + "_g_bold";
+  let h_bold_path = path.clone() + "_h_bold";
+  let path = path + ".rs";
 
   let generators = C::new_generators();
-  let mut g = String::new();
-  serialize(&mut g, &point, &[generators.generators.g()]);
-  let mut h = String::new();
-  serialize(&mut h, &point, &[generators.generators.h()]);
 
-  let mut g_bold: Vec<u8> =
-    Vec::with_capacity((2 * 32) * generators.generators.g_bold_slice().len());
-  for generator in generators.generators.g_bold_slice() {
-    let (x, y) = C::G::to_xy(*generator).expect("generator was the identity?");
-    g_bold.extend(x.to_repr().as_ref());
-    g_bold.extend(y.to_repr().as_ref());
-  }
+  let dir = env::var("OUT_DIR").expect("cargo didn't set $OUT_DIR");
+  let dir = Path::new(&dir);
 
-  let mut h_bold: Vec<u8> =
-    Vec::with_capacity((2 * 32) * generators.generators.h_bold_slice().len());
-  for generator in generators.generators.h_bold_slice() {
-    let (x, y) = C::G::to_xy(*generator).expect("generator was the identity?");
-    h_bold.extend(x.to_repr().as_ref());
-    h_bold.extend(y.to_repr().as_ref());
-  }
+  let read_bytes = |path, points: &[C::G]| {
+    let mut bytes: Vec<u8> = Vec::with_capacity((2 * 32) * points.len());
+    for generator in points {
+      let (x, y) = C::G::to_xy(*generator).expect("generator was the identity?");
+      bytes.extend(x.to_repr().as_ref());
+      bytes.extend(y.to_repr().as_ref());
+    }
 
-  let path = Path::new(&env::var("OUT_DIR").expect("cargo didn't set $OUT_DIR")).join(path);
+    {
+      let path = dir.join(&path);
+      let _ = remove_file(&path);
+      File::create(&path)
+        .expect("failed to create file in $OUT_DIR")
+        .write_all(&bytes)
+        .expect("couldn't write points as bytes to file in $OUT_DIR");
+    }
+
+    format!(
+      "
+        {{
+          const BYTES: &[u8] = include_bytes!(concat!(env!(\"OUT_DIR\"), \"/{path}\"));
+          let mut bytes = BYTES;
+          let mut x = [0; 32];
+          let mut y = [0; 32];
+          let mut res = Vec::with_capacity({});
+          while !bytes.is_empty() {{
+            x.copy_from_slice(&bytes[.. 32]);
+            bytes = &bytes[32 ..];
+            y.copy_from_slice(&bytes[.. 32]);
+            bytes = &bytes[32 ..];
+            res.push({});
+          }}
+          res
+        }}
+      ",
+      points.len(),
+      read_point(&point, "x", "y"),
+    )
+  };
+
+  let path = dir.join(&path);
   let _ = remove_file(&path);
   File::create(&path)
     .expect("failed to create file in $OUT_DIR")
@@ -96,77 +122,23 @@ where
       format!(
         "
           /// The FCMP generators for {id}.
-          pub(super) static {}_FCMP_GENERATORS:
+          static {}_FCMP_GENERATORS:
             std_shims::sync::LazyLock<monero_generators::FcmpGenerators<helioselene::{}>> =
               std_shims::sync::LazyLock::new(|| monero_generators::FcmpGenerators {{
                 generators: generalized_bulletproofs::Generators::new(
-                  {g}
-                  {h}
-                  {{
-                    const BYTES: &[u8] = &{:?};
-                    let mut bytes = BYTES;
-                    let mut x = [0; 32];
-                    let mut y = [0; 32];
-                    let mut res = Vec::with_capacity({});
-                    while !bytes.is_empty() {{
-                      x.copy_from_slice(&bytes[.. 32]);
-                      bytes = &bytes[32 ..];
-                      y.copy_from_slice(&bytes[.. 32]);
-                      bytes = &bytes[32 ..];
-                      res.push(
-                        helioselene::{point}::from_xy(
-                          <
-                            <helioselene::{point} as ec_divisors::DivisorCurve>::FieldElement
-                              as
-                            ciphersuite::group::ff::PrimeField
-                          >::from_repr(x).expect(\"build script x wasn't reduced\"),
-                          <
-                            <helioselene::{point} as ec_divisors::DivisorCurve>::FieldElement
-                              as
-                            ciphersuite::group::ff::PrimeField
-                          >::from_repr(y).expect(\"build script y wasn't reduced\"),
-                      ).expect(\"generator from buildf script wasn't on-curve\")
-                      );
-                    }}
-                    res
-                  }},
-                  {{
-                    const BYTES: &[u8] = &{:?};
-                    let mut bytes = BYTES;
-                    let mut x = [0; 32];
-                    let mut y = [0; 32];
-                    let mut res = Vec::with_capacity({});
-                    while !bytes.is_empty() {{
-                      x.copy_from_slice(&bytes[.. 32]);
-                      bytes = &bytes[32 ..];
-                      y.copy_from_slice(&bytes[.. 32]);
-                      bytes = &bytes[32 ..];
-                      res.push(
-                        helioselene::{point}::from_xy(
-                          <
-                            <helioselene::{point} as ec_divisors::DivisorCurve>::FieldElement
-                              as
-                            ciphersuite::group::ff::PrimeField
-                          >::from_repr(x).expect(\"build script x wasn't reduced\"),
-                          <
-                            <helioselene::{point} as ec_divisors::DivisorCurve>::FieldElement
-                              as
-                            ciphersuite::group::ff::PrimeField
-                          >::from_repr(y).expect(\"build script y wasn't reduced\"),
-                        ).expect(\"generator from build script wasn't on-curve\")
-                      );
-                    }}
-                    res
-                  }},
+                  {},
+                  {},
+                  {},
+                  {},
                 ).unwrap()
               }});
         ",
         id.clone().to_uppercase(),
         id,
-        g_bold.as_slice(),
-        generators.generators.g_bold_slice().len(),
-        h_bold.as_slice(),
-        generators.generators.h_bold_slice().len(),
+        serialize(&point, generators.generators.g()),
+        serialize(&point, generators.generators.h()),
+        read_bytes(g_bold_path, generators.generators.g_bold_slice()),
+        read_bytes(h_bold_path, generators.generators.h_bold_slice()),
       )
       .as_bytes(),
     )
@@ -184,14 +156,8 @@ fn generators() {
     .expect("failed to create file in $OUT_DIR")
     .write_all(
       b"
-        mod helios_generators {
-          include!(concat!(env!(\"OUT_DIR\"), \"/helios_generators.rs\"));
-        }
-        mod selene_generators {
-          include!(concat!(env!(\"OUT_DIR\"), \"/selene_generators.rs\"));
-        }
-        use helios_generators::HELIOS_FCMP_GENERATORS;
-        use selene_generators::SELENE_FCMP_GENERATORS;
+        include!(concat!(env!(\"OUT_DIR\"), \"/helios_generators.rs\"));
+        include!(concat!(env!(\"OUT_DIR\"), \"/selene_generators.rs\"));
       ",
     )
     .expect("couldn't write generated source code to file on disk");
