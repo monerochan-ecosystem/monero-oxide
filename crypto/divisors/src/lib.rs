@@ -6,14 +6,12 @@
 
 use barycentric::Interpolator;
 use divisor::{Divisor, SmallDivisor};
-use inversion::BatchInverse;
 use std_shims::{vec, vec::Vec};
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, ConstantTimeGreater, CtOption};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 mod barycentric;
 mod divisor;
 mod ec;
-mod inversion;
 mod sizes;
 
 pub use ec::{Curve, Projective, XyPoint};
@@ -130,7 +128,8 @@ fn slopes_and_denoms<C: DivisorCurve>(
     })
     .collect();
 
-  BatchInverse::invert_slice(diffs.as_mut_slice());
+  let mut scratch_space = vec![C::FieldElement::ZERO; diffs.len()];
+  ff::BatchInverter::invert_with_external_scratch(&mut diffs, &mut scratch_space);
 
   a.into_iter()
     .zip(b)
@@ -671,66 +670,7 @@ impl<F: Zeroize + PrimeFieldBits> ScalarDecomposition<F> {
   }
 }
 
-#[cfg(any(test, feature = "pasta"))]
-mod pasta {
-  use crate::DivisorCurve;
-  use crate::Projective;
-  use crate::{Precomp, Interpolator, EVALS};
-  use group::{ff::Field, Curve};
-  use pasta_curves::{
-    arithmetic::{Coordinates, CurveAffine},
-    Ep, Eq, Fp, Fq,
-  };
-  use std_shims::sync::OnceLock;
-
-  static FP_PRECOMPUTE_CELL: OnceLock<Precomp<Fp>> = OnceLock::new();
-  static FQ_PRECOMPUTE_CELL: OnceLock<Precomp<Fq>> = OnceLock::new();
-
-  impl DivisorCurve for Ep {
-    type FieldElement = Fp;
-    // TODO: using Self may be better
-    type XyPoint = Projective<Fp>;
-
-    fn a() -> Self::FieldElement {
-      Self::FieldElement::ZERO
-    }
-    fn b() -> Self::FieldElement {
-      Self::FieldElement::from(5u64)
-    }
-
-    fn PRECOMPUTE() -> Precomp<Self::FieldElement> {
-      FP_PRECOMPUTE_CELL.get_or_init(|| Interpolator::new(EVALS - 1)).clone()
-    }
-
-    fn to_xy(point: Self) -> Option<(Self::FieldElement, Self::FieldElement)> {
-      Option::<Coordinates<_>>::from(point.to_affine().coordinates())
-        .map(|coords| (*coords.x(), *coords.y()))
-    }
-  }
-
-  impl DivisorCurve for Eq {
-    type FieldElement = Fq;
-    // TODO: using Self may be better
-    type XyPoint = Projective<Fq>;
-
-    fn a() -> Self::FieldElement {
-      Self::FieldElement::ZERO
-    }
-    fn b() -> Self::FieldElement {
-      Self::FieldElement::from(5u64)
-    }
-
-    fn PRECOMPUTE() -> Precomp<Self::FieldElement> {
-      FQ_PRECOMPUTE_CELL.get_or_init(|| Interpolator::new(EVALS - 1)).clone()
-    }
-
-    fn to_xy(point: Self) -> Option<(Self::FieldElement, Self::FieldElement)> {
-      Option::<Coordinates<_>>::from(point.to_affine().coordinates())
-        .map(|coords| (*coords.x(), *coords.y()))
-    }
-  }
-}
-
+#[cfg(any(test, feature = "ed25519"))]
 mod ed25519 {
   use crate::{Projective, Precomp, Interpolator, EVALS};
   use dalek_ff_group::{EdwardsPoint, FieldElement};

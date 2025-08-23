@@ -1,7 +1,6 @@
 //! Trait for efficient coordinate conersion and general implementation
 //! based on projective arithmetic.
 
-use crate::inversion::BatchInverse;
 use core::ops::Neg;
 use ff::Field;
 use std_shims::vec::Vec;
@@ -142,15 +141,15 @@ impl<F: Field + Zeroize> XyPoint<F> for Projective<F> {
     Self { x, y, z }
   }
 
-  fn to_xy_batched(mut points: Vec<Self>) -> Vec<(F, F)> {
-    let z = points.iter().map(|p| &p.z);
-    let products = BatchInverse::products(z, None);
-    let z = points.iter_mut().map(|p| &mut p.z).rev();
-    BatchInverse::invert(z, &products);
+  fn to_xy_batched(points: Vec<Self>) -> Vec<(F, F)> {
+    let mut z = points.iter().map(|p| p.z).collect::<Vec<F>>();
+    let mut scratch_space = vec![F::ZERO; z.len()];
+    ff::BatchInverter::invert_with_external_scratch(&mut z, &mut scratch_space);
     points
       .into_iter()
-      .map(|p| {
-        let (x, y, z_inv) = p.coordinates();
+      .zip(z)
+      .map(|(p, z_inv)| {
+        let (x, y, _) = p.coordinates();
         (x * z_inv, y * z_inv)
       })
       .collect()

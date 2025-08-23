@@ -119,14 +119,14 @@ impl<F: PrimeField> Weights<F> {
 
 #[test]
 fn synthetic_div() {
-  use pasta_curves::Fp;
+  use dalek_ff_group::Scalar;
 
   let coeffs = vec![40_u64, 34, 52, 532, 89];
-  let poly: Vec<Fp> = coeffs.into_iter().map(Fp::from).collect();
+  let poly: Vec<Scalar> = coeffs.into_iter().map(Scalar::from).collect();
   let poly = Coeffs(poly);
 
   println!("poly: {:#?}", poly);
-  let c = Fp::from(432);
+  let c = Scalar::from(432u64);
   let (mut quot, rest) = poly.synthetic_division(c);
   quot.simple_mul(c);
   quot.0[0] += rest;
@@ -136,10 +136,10 @@ fn synthetic_div() {
 
 #[test]
 fn interpolation() {
-  use pasta_curves::Fp;
+  use dalek_ff_group::Scalar;
 
   let evals = vec![40_u64, 34, 52, 532, 89];
-  let evals: Vec<Fp> = evals.into_iter().map(Fp::from).collect();
+  let evals: Vec<Scalar> = evals.into_iter().map(Scalar::from).collect();
 
   let weights = Weights::new(5);
   let interpolator = Interpolator::new(4);
@@ -150,9 +150,9 @@ fn interpolation() {
   let l = weights.l();
   for i in 0 .. 5 {
     let li = weights.li(&l, i);
-    let li_eval = li.eval(Fp::from(i as u64));
+    let li_eval = li.eval(Scalar::from(i as u64));
     println!("L_{}({}): {:?}", i, i, li_eval);
-    let e = coeffs.eval(Fp::from(i as u64));
+    let e = coeffs.eval(Scalar::from(i as u64));
     evals2.push(e);
   }
   assert_eq!(evals, evals2);
