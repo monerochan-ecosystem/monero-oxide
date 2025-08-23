@@ -1,62 +1,17 @@
-//! Barycentric evaluation
-
-use core::{iter::successors, ops::AddAssign};
+use core::{
+  ops::{AddAssign, Mul},
+  iter::successors,
+};
 use std_shims::{vec, vec::Vec};
 
-use subtle::CtOption;
-use ff::{Field, PrimeField};
+use ff::{Field, PrimeField, BatchInvert};
 
-pub struct Weights<F: Field> {
-  weights: Vec<F>,
-  inverted_weights: Vec<F>,
-}
+#[cfg_attr(test, derive(Debug, PartialEq))]
+#[derive(Clone)]
+struct UnivariatePoly<F>(Vec<F>);
 
-#[derive(Debug, Clone)]
-pub struct Coeffs<F>(Vec<F>);
-
-impl<F: Field> Coeffs<F> {
-  #[cfg(test)]
-  fn eval(&self, x: F) -> F {
-    self.0.iter().rev().fold(F::ZERO, |acc, coeff| acc * x + coeff)
-  }
-
-  /// Mul by (x + c).
-  fn simple_mul(&mut self, c: F) {
-    let coeffs = &mut self.0;
-    coeffs.insert(0, F::ZERO);
-    for i in 0 .. (coeffs.len() - 1) {
-      let q = coeffs[i + 1];
-      coeffs[i] += q * c;
-    }
-  }
-
-  /// Divides arbitrary polynomial by (x + c) for given c.
-  fn synthetic_division(mut self, c: F) -> (Self, F) {
-    let coeffs = &mut self.0;
-    let len = coeffs.len();
-    let c_neg = -c;
-    let mut new_coeff = coeffs.pop().unwrap();
-    for i in 1 .. len {
-      let coeff = coeffs[len - 1 - i];
-      coeffs[len - 1 - i] = new_coeff;
-      new_coeff = coeff + new_coeff * c_neg;
-    }
-    let remainder = new_coeff;
-    (self, remainder)
-  }
-
-  fn scale_in_place(&mut self, scalar: F) {
-    for coeff in &mut self.0 {
-      coeff.mul_assign(scalar);
-    }
-  }
-
-  pub fn inner(self) -> Vec<F> {
-    self.0
-  }
-}
-
-impl<F: Field> AddAssign<&Self> for Coeffs<F> {
+impl<F: Field> AddAssign<&Self> for UnivariatePoly<F> {
+  /// Panics if the polynomials are of different lengths.
   fn add_assign(&mut self, rhs: &Self) {
     assert_eq!(self.0.len(), rhs.0.len());
     for i in 0 .. self.0.len() {
@@ -65,9 +20,73 @@ impl<F: Field> AddAssign<&Self> for Coeffs<F> {
   }
 }
 
+impl<F: Field> Mul<F> for UnivariatePoly<F> {
+  type Output = Self;
+  fn mul(mut self, scalar: F) -> Self {
+    for coeff in &mut self.0 {
+      *coeff *= scalar;
+    }
+    self
+  }
+}
+
+impl<F: Field> UnivariatePoly<F> {
+  #[cfg(test)]
+  fn eval(&self, x: F) -> F {
+    self.0.iter().rev().fold(F::ZERO, |acc, coeff| (acc * x) + coeff)
+  }
+
+  // Mul by `x + c`.
+  fn mul_x_c(&mut self, c: F) {
+    let coeffs = &mut self.0;
+    coeffs.insert(0, F::ZERO);
+    for i in 0 .. (coeffs.len() - 1) {
+      let q = coeffs[i + 1];
+      coeffs[i] += q * c;
+    }
+  }
+
+  /// Divide the polynomial by `x + c` for given `c`.
+  ///
+  /// Executes in time variable to the length of the polynomial.
+  fn div_x_c(mut self, c: F) -> (Self, F) {
+    let coeffs = &mut self.0;
+    let len = coeffs.len();
+    let Some(mut new_coeff) = coeffs.pop() else {
+      return (Self(vec![]), F::ZERO);
+    };
+    for i in 1 .. len {
+      let coeff = coeffs[len - 1 - i];
+      coeffs[len - 1 - i] = new_coeff;
+      new_coeff = coeff - (new_coeff * c);
+    }
+    let remainder = new_coeff;
+    (self, remainder)
+  }
+}
+
+struct Weights<F: Field> {
+  inverted_weights: Vec<F>,
+  l: UnivariatePoly<F>,
+}
+
 impl<F: PrimeField> Weights<F> {
-  pub fn new(domain_size: usize) -> Self {
-    let start = Some(F::ZERO - F::ONE);
+  /// P(x) = (x-0)(x-1)(x-2)...(x-domain_size - 1)
+  fn l(domain_size: usize) -> UnivariatePoly<F> {
+    assert_ne!(domain_size, 0);
+
+    let mut poly = UnivariatePoly(vec![F::ONE]);
+    for i in 0 .. domain_size {
+      let i: F = F::from(u64::try_from(i).unwrap());
+      poly.mul_x_c(-i);
+    }
+    poly
+  }
+
+  fn new(domain_size: usize) -> Self {
+    assert_ne!(domain_size, 0);
+
+    let start = Some(-F::ONE);
     let diffs = successors(start, |prev| Some(*prev - F::ONE));
     let diff_products = diffs.scan(F::ONE, |product, diff| {
       *product *= diff;
@@ -87,132 +106,136 @@ impl<F: PrimeField> Weights<F> {
 
     let weights: Vec<F> =
       diff_products_left.zip(diff_products_right).map(|(left, right)| left * right).collect();
-    Self::from_weights(weights)
+
+    let mut inverted_weights = weights.clone();
+    (&mut inverted_weights).batch_invert();
+    Weights { inverted_weights, l: Self::l(domain_size) }
   }
 
-  fn from_weights(weights: Vec<F>) -> Self {
-    let inverted_weights = weights.iter().map(F::invert).map(CtOption::unwrap).collect();
-    Weights { weights, inverted_weights }
+  fn li(&self, i: usize) -> UnivariatePoly<F> {
+    ({
+      let i = -F::from(u64::try_from(i).unwrap());
+      let (li, rem) = self.l.clone().div_x_c(i);
+      // The `l` polynomial is the product of `x - i`, ensuring we can divide out `x - i`
+      debug_assert_eq!(rem, F::ZERO);
+      li
+    }) * self.inverted_weights[i]
   }
+}
 
-  /// P(x) = (x-0)(x-1)(x-2)...(x-domain_size - 1)
-  fn l(&self) -> Coeffs<F> {
-    let mut poly = Coeffs(vec![F::ONE]);
-    let domain_size = self.weights.len();
+/// A precomputed box which can perform Lagrange interpolation.
+///
+/// This box is able to interpolate evaluations of a polynomial to recover the original polynomial.
+/// Notably, when this box is constructed, the degree of the output polynomial must be specified,
+/// and the amount of evaluations provided MUST exceed the degree of the output polynomial.
+#[derive(Clone)]
+pub struct Interpolator<F: Field> {
+  lagrange_polys: Vec<UnivariatePoly<F>>,
+}
+
+impl<F: PrimeField> Interpolator<F> {
+  /// Create a new box eligible for Lagrange interpolation.
+  ///
+  /// This may panic if the degree is `usize::MAX`.
+  pub fn new(degree: usize) -> Self {
+    let domain_size = degree + 1;
+    let weights = Weights::new(domain_size);
+    let mut lagrange_polys = Vec::with_capacity(domain_size);
     for i in 0 .. domain_size {
-      let constant: F = F::from(i as u64);
-      let c = -constant;
-      poly.simple_mul(c);
+      let li = weights.li(i);
+      lagrange_polys.push(li);
     }
-    poly
+    Self { lagrange_polys }
   }
 
-  fn li(&self, l: &Coeffs<F>, i: usize) -> Coeffs<F> {
-    assert!(i < self.weights.len());
-    let weight = self.inverted_weights[i];
-    let c = -F::from(i as u64);
-    let (mut li, rest) = l.clone().synthetic_division(c);
-    assert_eq!(rest, F::ZERO);
-    li.scale_in_place(weight);
-    li
+  pub(crate) fn required_evaluations(&self) -> usize {
+    self.lagrange_polys.len()
+  }
+
+  /// Attempt to reconstruct the original polynomial via interpolation.
+  ///
+  /// Returns `None` if not enough evaluations were provided to attempt interpolation.
+  pub(crate) fn interpolate(&self, evals: &[F]) -> Option<Vec<F>> {
+    if evals.len() < self.lagrange_polys.len() {
+      None?;
+    }
+
+    let poly = vec![F::ZERO; evals.len()];
+    let mut poly = UnivariatePoly(poly);
+    for (eval, li) in evals.iter().zip(&self.lagrange_polys) {
+      for (res, li) in poly.0.iter_mut().zip(&li.0) {
+        *res += *li * *eval;
+      }
+    }
+
+    Some(poly.0)
   }
 }
 
 #[test]
-fn synthetic_div() {
+fn test_div_x_c() {
+  use rand_core::OsRng;
   use dalek_ff_group::Scalar;
+  use crate::Poly;
 
-  let coeffs = vec![40_u64, 34, 52, 532, 89];
-  let poly: Vec<Scalar> = coeffs.into_iter().map(Scalar::from).collect();
-  let poly = Coeffs(poly);
-
-  println!("poly: {poly:#?}");
-  let c = Scalar::from(432u64);
-  let (mut quot, rest) = poly.synthetic_division(c);
-  quot.simple_mul(c);
-  quot.0[0] += rest;
-  let poly = quot;
-  println!("poly: {poly:#?}");
+  {
+    assert_eq!(
+      UnivariatePoly(vec![]).div_x_c(Scalar::random(&mut OsRng)),
+      (UnivariatePoly(vec![]), Scalar::ZERO)
+    );
+  }
+  {
+    let c0 = Scalar::random(&mut OsRng);
+    assert_eq!(
+      UnivariatePoly(vec![c0]).div_x_c(Scalar::random(&mut OsRng)),
+      (UnivariatePoly(vec![]), c0)
+    );
+  }
+  for i in 2 .. 256 {
+    let mut coeffs = UnivariatePoly(vec![Scalar::ZERO; i]);
+    for coeff in &mut coeffs.0 {
+      *coeff = Scalar::random(&mut OsRng);
+    }
+    let poly = Poly::<Scalar> {
+      zero_coefficient: coeffs.0[0],
+      x_coefficients: coeffs.0[1 ..].to_vec(),
+      yx_coefficients: vec![],
+      y_coefficients: vec![],
+    };
+    let denom = Scalar::random(&mut OsRng);
+    let (coeffs_div, coeffs_rem) = coeffs.div_x_c(denom);
+    let (mut poly_div, poly_rem) = poly.div_rem(&Poly {
+      zero_coefficient: denom,
+      x_coefficients: vec![Scalar::ONE],
+      yx_coefficients: vec![],
+      y_coefficients: vec![],
+    });
+    assert_eq!(coeffs_div.0[0], poly_div.zero_coefficient);
+    assert_eq!(poly_div.x_coefficients.pop(), Some(Scalar::ZERO));
+    assert_eq!(&coeffs_div.0[1 ..], &poly_div.x_coefficients);
+    assert!(poly_div.yx_coefficients.is_empty());
+    assert!(poly_div.y_coefficients.is_empty());
+    assert_eq!(coeffs_rem, poly_rem.zero_coefficient);
+    assert!(poly_rem.x_coefficients.is_empty());
+    assert!(poly_rem.yx_coefficients.is_empty());
+    assert!(poly_rem.y_coefficients.is_empty());
+  }
 }
 
 #[test]
 fn interpolation() {
+  use rand_core::OsRng;
   use dalek_ff_group::Scalar;
 
-  let evals = vec![40_u64, 34, 52, 532, 89];
-  let evals: Vec<Scalar> = evals.into_iter().map(Scalar::from).collect();
-
-  let weights = Weights::new(5);
-  let interpolator = Interpolator::new(4);
-  println!("weights: \n {:#?}", weights.weights);
-
-  let coeffs = interpolator.interpolate(evals.clone());
-  let mut evals2 = vec![];
-  let l = weights.l();
-  for i in 0 .. 5 {
-    let li = weights.li(&l, i);
-    let li_eval = li.eval(Scalar::from(i as u64));
-    println!("L_{i}({i}): {li_eval:?}");
-    let e = coeffs.eval(Scalar::from(i as u64));
-    evals2.push(e);
-  }
-  assert_eq!(evals, evals2);
-}
-
-/// All precomputation necessary to optimally interpolate polynomials
-/// of a given degree.
-#[derive(Clone)]
-pub struct Interpolator<F: Field> {
-  /// maximal degree expected
-  degree: usize,
-  lagrange_polys: Vec<Coeffs<F>>,
-}
-
-impl<F: PrimeField> Interpolator<F> {
-  pub fn new(degree: usize) -> Self {
-    let domain_size = degree + 1;
-    let weights = Weights::new(domain_size);
-    let mut lagrange_polys = vec![];
-    let l = weights.l();
-    for i in 0 .. (domain_size) {
-      let li = weights.li(&l, i);
-      lagrange_polys.push(li);
+  for i in 2 .. 256 {
+    let mut evals = vec![Scalar::ZERO; i];
+    for eval in &mut evals {
+      *eval = Scalar::random(&mut OsRng);
     }
-    Self { degree, lagrange_polys }
-  }
 
-  pub(crate) fn degree(&self) -> usize {
-    self.degree
-  }
-
-  pub fn interpolate(&self, mut evals: Vec<F>) -> Coeffs<F> {
-    assert!(evals.len() > self.degree);
-    evals.truncate(self.degree + 1);
-    let len = evals.len();
-
-    let poly = vec![F::ZERO; len];
-    let mut poly = Coeffs(poly);
-    for (i, eval) in evals.iter().enumerate().take(len) {
-      let mut li = self.lagrange_polys[i].clone();
-      li.scale_in_place(*eval);
-      poly += &li;
+    let coeffs = UnivariatePoly(Interpolator::new(i - 1).interpolate(&evals).unwrap());
+    for (i, eval) in evals.into_iter().enumerate() {
+      assert_eq!(coeffs.eval(Scalar::from(u64::try_from(i).unwrap())), eval);
     }
-    poly
   }
 }
-
-// (Xi - X0)(Xi - X1)(Xi - X2)(Xi - X3)
-// i = 1 (X1 - X0)(X1 - X2)(X1 - X3)
-// i = 2 (X2 - X0)(X2 - X1)(X2 - X3)
-//
-// (Xi - 0)(Xi - 1)(Xi - 2)(Xi - 3)
-// i = 1 (1 - 0)(1 - 2)(1 - 3)
-// i = 2 (2 - 0)(2 - 1)(2 - 3)
-//
-// i = 1 : 1 * -1 * -2
-// i = 1 : 2 * 1 * -2
-// (Xi - 0)(Xi - 1)(Xi - 2)(Xi - 3)
-// !(0 - 0)(0 - 1)(0 - 2)(0 - 3) = (1) * -1 * -2 * -3
-// (1 - 0)!(1 - 1)(1 - 2)(1 - 3) = 1 * (1) * -1 * -2
-// (2 - 0)(2 - 1)!(2 - 2)(2 - 3) = 2 * 1 * (1) * -1
-// (3 - 0)(3 - 1)(3 - 2)!(3 - 3) = 3 * 2 * 1 * (1)
