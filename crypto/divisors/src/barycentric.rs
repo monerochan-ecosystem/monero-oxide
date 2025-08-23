@@ -6,6 +6,7 @@ use std_shims::{vec, vec::Vec};
 
 use ff::{Field, PrimeField, BatchInvert};
 
+/// The coefficients for a univariate polynomial with the leading coefficient _first_.
 #[cfg_attr(test, derive(Debug, PartialEq))]
 #[derive(Clone)]
 struct UnivariatePoly<F>(Vec<F>);
@@ -33,16 +34,18 @@ impl<F: Field> Mul<F> for UnivariatePoly<F> {
 impl<F: Field> UnivariatePoly<F> {
   #[cfg(test)]
   fn eval(&self, x: F) -> F {
-    self.0.iter().rev().fold(F::ZERO, |acc, coeff| (acc * x) + coeff)
+    self.0.iter().fold(F::ZERO, |acc, coeff| (acc * x) + coeff)
   }
 
   // Mul by `x + c`.
   fn mul_x_c(&mut self, c: F) {
     let coeffs = &mut self.0;
-    coeffs.insert(0, F::ZERO);
-    for i in 0 .. (coeffs.len() - 1) {
-      let q = coeffs[i + 1];
-      coeffs[i] += q * c;
+    coeffs.push(F::ZERO);
+    let mut prior_coeff = coeffs[0];
+    for coeff in &mut coeffs[1 ..] {
+      let this_coeff = *coeff;
+      *coeff += prior_coeff * c;
+      prior_coeff = this_coeff;
     }
   }
 
@@ -51,14 +54,14 @@ impl<F: Field> UnivariatePoly<F> {
   /// Executes in time variable to the length of the polynomial.
   fn div_x_c(mut self, c: F) -> (Self, F) {
     let coeffs = &mut self.0;
-    let len = coeffs.len();
-    let Some(mut new_coeff) = coeffs.pop() else {
+    if coeffs.is_empty() {
       return (Self(vec![]), F::ZERO);
-    };
-    for i in 1 .. len {
-      let coeff = coeffs[len - 1 - i];
-      coeffs[len - 1 - i] = new_coeff;
-      new_coeff = coeff - (new_coeff * c);
+    }
+    let mut new_coeff = coeffs.remove(0);
+    for coeff in coeffs {
+      let this_coeff = *coeff;
+      *coeff = new_coeff;
+      new_coeff = this_coeff - (new_coeff * c);
     }
     let remainder = new_coeff;
     (self, remainder)
@@ -154,21 +157,21 @@ impl<F: PrimeField> Interpolator<F> {
 
   /// Attempt to reconstruct the original polynomial via interpolation.
   ///
+  /// The returned polynomial will have its leading coefficient _last_.
+  ///
   /// Returns `None` if not enough evaluations were provided to attempt interpolation.
   pub(crate) fn interpolate(&self, evals: &[F]) -> Option<Vec<F>> {
     if evals.len() < self.lagrange_polys.len() {
       None?;
     }
 
-    let poly = vec![F::ZERO; evals.len()];
-    let mut poly = UnivariatePoly(poly);
+    let mut poly = vec![F::ZERO; evals.len()];
     for (eval, li) in evals.iter().zip(&self.lagrange_polys) {
-      for (res, li) in poly.0.iter_mut().zip(&li.0) {
+      for (res, li) in poly.iter_mut().zip(li.0.iter().rev()) {
         *res += *li * *eval;
       }
     }
-
-    Some(poly.0)
+    Some(poly)
   }
 }
 
@@ -197,8 +200,8 @@ fn test_div_x_c() {
       *coeff = Scalar::random(&mut OsRng);
     }
     let poly = Poly::<Scalar> {
-      zero_coefficient: coeffs.0[0],
-      x_coefficients: coeffs.0[1 ..].to_vec(),
+      zero_coefficient: *coeffs.0.last().unwrap(),
+      x_coefficients: coeffs.0[.. (i - 1)].iter().copied().rev().collect(),
       yx_coefficients: vec![],
       y_coefficients: vec![],
     };
@@ -210,9 +213,12 @@ fn test_div_x_c() {
       yx_coefficients: vec![],
       y_coefficients: vec![],
     });
-    assert_eq!(coeffs_div.0[0], poly_div.zero_coefficient);
+    assert_eq!(*coeffs_div.0.last().unwrap(), poly_div.zero_coefficient);
     assert_eq!(poly_div.x_coefficients.pop(), Some(Scalar::ZERO));
-    assert_eq!(&coeffs_div.0[1 ..], &poly_div.x_coefficients);
+    assert_eq!(
+      &coeffs_div.0[.. (coeffs_div.0.len() - 1)].iter().copied().rev().collect::<Vec<_>>(),
+      &poly_div.x_coefficients
+    );
     assert!(poly_div.yx_coefficients.is_empty());
     assert!(poly_div.y_coefficients.is_empty());
     assert_eq!(coeffs_rem, poly_rem.zero_coefficient);
@@ -233,7 +239,9 @@ fn interpolation() {
       *eval = Scalar::random(&mut OsRng);
     }
 
-    let coeffs = UnivariatePoly(Interpolator::new(i - 1).interpolate(&evals).unwrap());
+    let coeffs = UnivariatePoly(
+      Interpolator::new(i - 1).interpolate(&evals).unwrap().into_iter().rev().collect(),
+    );
     for (i, eval) in evals.into_iter().enumerate() {
       assert_eq!(coeffs.eval(Scalar::from(u64::try_from(i).unwrap())), eval);
     }
