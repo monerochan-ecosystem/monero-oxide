@@ -2,7 +2,7 @@ use rand_core::OsRng;
 
 use ciphersuite::{group::Group, Ciphersuite};
 
-use crate::{Generators, padded_pow_of_2};
+use crate::Generators;
 
 #[cfg(test)]
 mod inner_product;
@@ -14,7 +14,7 @@ mod arithmetic_circuit_proof;
 ///
 /// This should not be considered secure.
 pub fn generators<C: Ciphersuite>(n: usize) -> Generators<C> {
-  assert_eq!(padded_pow_of_2(n), n, "amount of generators wasn't a power of 2");
+  assert_eq!(n.next_power_of_two(), n, "amount of generators wasn't a power of 2");
 
   let gens = || {
     let mut res = Vec::with_capacity(n);

@@ -34,15 +34,6 @@ pub mod arithmetic_circuit_proof;
 #[cfg(any(test, feature = "tests"))]
 pub mod tests;
 
-/// Calculate the nearest power of two greater than or equivalent to the argument.
-pub(crate) fn padded_pow_of_2(i: usize) -> usize {
-  let mut next_pow_of_2 = 1;
-  while next_pow_of_2 < i {
-    next_pow_of_2 <<= 1;
-  }
-  next_pow_of_2
-}
-
 /// An error from working with generators.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum GeneratorsError {
@@ -143,7 +134,7 @@ impl<C: Ciphersuite> Generators<C> {
     if g_bold.len() != h_bold.len() {
       Err(GeneratorsError::DifferingGhBoldLengths)?;
     }
-    if padded_pow_of_2(g_bold.len()) != g_bold.len() {
+    if g_bold.len().next_power_of_two() != g_bold.len() {
       Err(GeneratorsError::NotPowerOfTwo)?;
     }
 
@@ -244,7 +235,7 @@ impl<C: Ciphersuite> Generators<C> {
     }
 
     // Round to the nearest power of 2
-    let generators = padded_pow_of_2(generators);
+    let generators = generators.next_power_of_two();
     if generators > self.g_bold.len() {
       None?;
     }
