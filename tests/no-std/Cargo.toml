@@ -18,5 +18,4 @@ rustdoc-args = ["--cfg", "docsrs"]
 workspace = true
 
 [dependencies]
-monero-fcmp-plus-plus = { path = "../../monero-oxide/ringct/fcmp++", default-features = false }
 monero-wallet = { path = "../../monero-oxide/wallet", default-features = false, features = ["compile-time-generators"] }

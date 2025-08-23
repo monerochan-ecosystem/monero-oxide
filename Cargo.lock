@@ -1049,7 +1049,6 @@ dependencies = [
 name = "monero-oxide-no-std-tests"
 version = "0.1.0"
 dependencies = [
- "monero-fcmp-plus-plus",
  "monero-wallet",
 ]
 
