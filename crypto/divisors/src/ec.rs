@@ -3,7 +3,7 @@ use std_shims::vec::Vec;
 
 use zeroize::Zeroize;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq};
-use ff::Field;
+use ff::{Field, BatchInvert};
 
 use crate::DivisorCurve;
 
@@ -164,8 +164,7 @@ impl<C: DivisorCurve> XyPoint<C::FieldElement> for Projective<C> {
         p.z
       })
       .collect::<Vec<_>>();
-    let mut scratch_space = vec![C::FieldElement::ZERO; z.len()];
-    ff::BatchInverter::invert_with_external_scratch(&mut z, &mut scratch_space);
+    (&mut z).batch_invert();
     points.iter().zip(z).map(|(p, z_inv)| (p.x * z_inv, p.y * z_inv)).collect()
   }
 }
