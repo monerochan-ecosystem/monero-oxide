@@ -151,6 +151,10 @@ impl<F: PrimeField> Interpolator<F> {
     Self { lagrange_polys }
   }
 
+  pub(crate) fn degree(&self) -> usize {
+    self.lagrange_polys.len() - 1
+  }
+
   pub(crate) fn required_evaluations(&self) -> usize {
     self.lagrange_polys.len()
   }
@@ -159,7 +163,8 @@ impl<F: PrimeField> Interpolator<F> {
   ///
   /// The returned polynomial will have its leading coefficient _last_.
   ///
-  /// Returns `None` if not enough evaluations were provided to attempt interpolation.
+  /// Returns `None` if not enough evaluations were provided to attempt interpolation. Returns
+  /// garbage if the polynomial's degree exceeds this interpolator's.
   pub(crate) fn interpolate(&self, evals: &[F]) -> Option<Vec<F>> {
     if evals.len() < self.lagrange_polys.len() {
       None?;

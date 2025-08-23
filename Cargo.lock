@@ -359,10 +359,10 @@ dependencies = [
 name = "ec-divisors"
 version = "0.1.0"
 dependencies = [
+ "crypto-bigint",
  "dalek-ff-group",
  "ff",
  "group",
- "hex",
  "rand_core",
  "std-shims",
  "subtle",

@@ -157,7 +157,13 @@ impl<C: DivisorCurve> XyPoint<C::FieldElement> for Projective<C> {
   }
 
   fn batch_to_xy(points: &[Self]) -> Vec<(C::FieldElement, C::FieldElement)> {
-    let mut z = points.iter().map(|p| { assert!(bool::from(!p.z.is_zero())); p.z }).collect::<Vec<_>>();
+    let mut z = points
+      .iter()
+      .map(|p| {
+        assert!(bool::from(!p.z.is_zero()));
+        p.z
+      })
+      .collect::<Vec<_>>();
     let mut scratch_space = vec![C::FieldElement::ZERO; z.len()];
     ff::BatchInverter::invert_with_external_scratch(&mut z, &mut scratch_space);
     points.iter().zip(z).map(|(p, z_inv)| (p.x * z_inv, p.y * z_inv)).collect()
@@ -205,5 +211,8 @@ mod ed25519_test {
     assert_eq!(projective + Projective::<EdwardsPoint>::IDENTITY, projective, "point + identity");
     assert_eq!(projective + projective, projective.double(), "point + point");
     assert_eq!(projective + -projective, Projective::<EdwardsPoint>::IDENTITY, "point + -point");
+
+    // Handle edge cases with addition
+    assert_eq!(Projective::<EdwardsPoint>::IDENTITY.double(), Projective::<EdwardsPoint>::IDENTITY);
   }
 }

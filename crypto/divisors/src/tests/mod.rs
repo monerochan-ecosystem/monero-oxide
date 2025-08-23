@@ -14,14 +14,52 @@ fn points_xy<C: DivisorCurve>(points: &[C]) -> Vec<C::XyPoint> {
   points.iter().copied().map(C::XyPoint::from).collect()
 }
 
+/// y^2 - x^3 - A x - B
+///
+/// Section 2 of Eagen's security proofs define this modulus.
+fn divisor_modulus<C: DivisorCurve>() -> Poly<C::FieldElement> {
+  Poly {
+    // 0 y**1, 1 y*2
+    y_coefficients: vec![C::FieldElement::ZERO, C::FieldElement::ONE],
+    yx_coefficients: vec![],
+    x_coefficients: vec![
+      // - A x
+      -C::a(),
+      // 0 x^2
+      C::FieldElement::ZERO,
+      // - x^3
+      -C::FieldElement::ONE,
+    ],
+    // - B
+    zero_coefficient: -C::b(),
+  }
+}
+
+/// Calculate the slope and intercept between two points.
+///
+/// This function panics when `a @ infinity`, `b @ infinity`, `a == b`, or when `a == -b`.
+pub(crate) fn slope_intercept<C: DivisorCurve>(a: C, b: C) -> (C::FieldElement, C::FieldElement) {
+  let (ax, ay) = C::to_xy(a).unwrap();
+  debug_assert_eq!(divisor_modulus::<C>().eval(ax, ay), C::FieldElement::ZERO);
+  let (bx, by) = C::to_xy(b).unwrap();
+  debug_assert_eq!(divisor_modulus::<C>().eval(bx, by), C::FieldElement::ZERO);
+  let slope = (by - ay) *
+    Option::<C::FieldElement>::from((bx - ax).invert())
+      .expect("trying to get slope/intercept of points sharing an x coordinate");
+  let intercept = by - (slope * bx);
+  debug_assert!(bool::from((ay - (slope * ax) - intercept).is_zero()));
+  debug_assert!(bool::from((by - (slope * bx) - intercept).is_zero()));
+  (slope, intercept)
+}
+
 // Equation 4 in the security proofs
 fn check_divisor<C: DivisorCurve>(points: Vec<C>) {
-  let precomputation = C::precomputation_for_degree_of_num_bits();
+  let precomputation = C::interpolator_for_scalar_mul();
 
   let points_xy = points_xy(&points);
 
   // Create the divisor
-  let divisor = new_divisor::<C>(&points_xy, &precomputation).unwrap();
+  let divisor = new_divisor::<C>(&points_xy, precomputation).unwrap();
   let eval = |c| {
     let (x, y) = C::to_xy(c).unwrap();
     divisor.eval(x, y)
@@ -31,7 +69,7 @@ fn check_divisor<C: DivisorCurve>(points: Vec<C>) {
   let c0 = C::random(&mut OsRng);
   let c1 = C::random(&mut OsRng);
   let c2 = -(c0 + c1);
-  let (slope, intercept) = crate::slope_intercept::<C>(c0, c1);
+  let (slope, intercept) = slope_intercept::<C>(c0, c1);
 
   let mut rhs = <C as DivisorCurve>::FieldElement::ONE;
   for point in points {
@@ -42,7 +80,7 @@ fn check_divisor<C: DivisorCurve>(points: Vec<C>) {
 }
 
 fn test_divisor<C: DivisorCurve>() {
-  let precomputation = C::precomputation_for_degree_of_num_bits();
+  let precomputation = C::interpolator_for_scalar_mul();
   for i in 1 ..= (C::Scalar::NUM_BITS + 1) {
     println!("Test iteration {i}");
 
@@ -59,7 +97,7 @@ fn test_divisor<C: DivisorCurve>() {
 
     let points_xy = points_xy(&points);
     // Create the divisor
-    let divisor = new_divisor::<C>(&points_xy, &precomputation).unwrap();
+    let divisor = new_divisor::<C>(&points_xy, precomputation).unwrap();
 
     // For a divisor interpolating 256 points, as one does when interpreting a 255-bit discrete log
     // with the result of its scalar multiplication against a fixed generator, the lengths of the
@@ -78,7 +116,7 @@ fn test_divisor<C: DivisorCurve>() {
     let c0 = C::random(&mut OsRng);
     let c1 = C::random(&mut OsRng);
     let c2 = -(c0 + c1);
-    let (slope, intercept) = crate::slope_intercept::<C>(c0, c1);
+    let (slope, intercept) = slope_intercept::<C>(c0, c1);
 
     // Perform the Logarithmic derivative check
     {

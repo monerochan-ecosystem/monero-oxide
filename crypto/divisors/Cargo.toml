@@ -26,16 +26,16 @@ subtle = { version = "2", default-features = false }
 ff = { version = "0.13", default-features = false, features = ["bits"] }
 group = { version = "0.13", default-features = false }
 
-hex = { version = "0.4", default-features = false, optional = true }
+crypto-bigint = { version = "0.5", default-features = false, features = ["zeroize"], optional = true }
 dalek-ff-group = { version = "0.4", default-features = false, optional = true }
 
 [dev-dependencies]
 rand_core = { version = "0.6", features = ["getrandom"] }
 
-hex = "0.4"
-dalek-ff-group = { version = "0.4", features = ["std"] }
+crypto-bigint = { version = "0.5", default-features = false, features = ["zeroize"] }
+dalek-ff-group = { version = "0.4", default-features = false }
 
 [features]
 std = ["std-shims/std", "zeroize/std", "subtle/std", "ff/std", "dalek-ff-group?/std"]
-ed25519 = ["hex/alloc", "dalek-ff-group"]
+ed25519 = ["crypto-bigint", "dalek-ff-group"]
 default = ["std"]

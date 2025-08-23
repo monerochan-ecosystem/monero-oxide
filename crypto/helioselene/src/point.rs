@@ -414,12 +414,12 @@ macro_rules! curve {
       type FieldElement = $Field;
       type XyPoint = ec_divisors::Projective<Self>;
 
-      fn precomputation_for_degree_of_num_bits() -> ec_divisors::Precomp<Self::FieldElement> {
-        static PRECOMPUTE: std_shims::sync::LazyLock<ec_divisors::Precomp<$Field>> =
+      fn interpolator_for_scalar_mul() -> &'static ec_divisors::Interpolator<Self::FieldElement> {
+        static PRECOMPUTE: std_shims::sync::LazyLock<ec_divisors::Interpolator<$Field>> =
           std_shims::sync::LazyLock::new(|| {
-            ec_divisors::Precomp::new(usize::try_from($Scalar::NUM_BITS).unwrap())
+            ec_divisors::Interpolator::new(usize::try_from(130).unwrap())
           });
-        (*PRECOMPUTE).clone()
+        &PRECOMPUTE
       }
 
       fn a() -> Self::FieldElement {
