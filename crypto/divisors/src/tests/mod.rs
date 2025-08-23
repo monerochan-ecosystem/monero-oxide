@@ -1,16 +1,32 @@
-use rand_core::OsRng;
-
-use group::{ff::Field, Group};
+use crate::XyPoint;
+use crate::{barycentric::Interpolator, new_divisor, DivisorCurve, Poly};
 use dalek_ff_group::EdwardsPoint;
-
-use crate::{DivisorCurve, Poly, new_divisor};
+use group::{ff::Field, Group};
+use pasta_curves::{Ep, Eq};
+use rand_core::OsRng;
 
 mod poly;
 
+type Precomp<C> = Interpolator<<C as DivisorCurve>::FieldElement>;
+
+fn points_xy<C: DivisorCurve>(points: &[C]) -> Vec<C::XyPoint> {
+  points
+    .iter()
+    .cloned()
+    .map(|p| {
+      let (x, y) = C::to_xy(p).unwrap();
+      C::XyPoint::from_affine(x, y)
+    })
+    .collect()
+}
+
 // Equation 4 in the security proofs
-fn check_divisor<C: DivisorCurve>(points: Vec<C>) {
+fn check_divisor<C: DivisorCurve>(points: Vec<C>, precomputation: &Precomp<C>) {
+  let points_xy = points_xy(&points);
+  let curve = C::curve();
+
   // Create the divisor
-  let divisor = new_divisor::<C>(&points).unwrap();
+  let divisor = new_divisor::<C>(&points_xy, precomputation, &curve).unwrap();
   let eval = |c| {
     let (x, y) = C::to_xy(c).unwrap();
     divisor.eval(x, y)
@@ -31,6 +47,8 @@ fn check_divisor<C: DivisorCurve>(points: Vec<C>) {
 }
 
 fn test_divisor<C: DivisorCurve>() {
+  let precomputation = C::PRECOMPUTE();
+  let curve = C::curve();
   for i in 1 ..= 255 {
     println!("Test iteration {i}");
 
@@ -43,10 +61,11 @@ fn test_divisor<C: DivisorCurve>() {
     println!("Points {}", points.len());
 
     // Perform the original check
-    check_divisor(points.clone());
+    check_divisor(points.clone(), &precomputation);
 
+    let points_xy = points_xy(&points);
     // Create the divisor
-    let divisor = new_divisor::<C>(&points).unwrap();
+    let divisor = new_divisor::<C>(&points_xy, &precomputation, &curve).unwrap();
 
     // For a divisor interpolating 256 points, as one does when interpreting a 255-bit discrete log
     // with the result of its scalar multiplication against a fixed generator, the lengths of the
@@ -144,13 +163,15 @@ fn test_divisor<C: DivisorCurve>() {
 }
 
 fn test_same_point<C: DivisorCurve>() {
+  let precomputation = C::PRECOMPUTE();
   let mut points = vec![C::random(&mut OsRng)];
   points.push(points[0]);
   points.push(-points.iter().sum::<C>());
-  check_divisor(points);
+  check_divisor(points, &precomputation);
 }
 
 fn test_subset_sum_to_infinity<C: DivisorCurve>() {
+  let precomputation = C::PRECOMPUTE();
   // Internally, a binary tree algorithm is used
   // This executes the first pass to end up with [0, 0] for further reductions
   {
@@ -160,7 +181,7 @@ fn test_subset_sum_to_infinity<C: DivisorCurve>() {
     let next = C::random(&mut OsRng);
     points.push(next);
     points.push(-next);
-    check_divisor(points);
+    check_divisor(points, &precomputation);
   }
 
   // This executes the first pass to end up with [0, X, -X, 0]
@@ -179,8 +200,22 @@ fn test_subset_sum_to_infinity<C: DivisorCurve>() {
     let next = C::random(&mut OsRng);
     points.push(next);
     points.push(-next);
-    check_divisor(points);
+    check_divisor(points, &precomputation);
   }
+}
+
+#[test]
+fn test_divisor_pallas() {
+  test_same_point::<Ep>();
+  test_subset_sum_to_infinity::<Ep>();
+  test_divisor::<Ep>();
+}
+
+#[test]
+fn test_divisor_vesta() {
+  test_same_point::<Eq>();
+  test_subset_sum_to_infinity::<Eq>();
+  test_divisor::<Eq>();
 }
 
 #[test]
