@@ -116,13 +116,14 @@ where
 
   let path = dir.join(&path);
   let _ = remove_file(&path);
+  // TODO: Don't expose these with `pub`
   File::create(&path)
     .expect("failed to create file in $OUT_DIR")
     .write_all(
       format!(
         "
           /// The FCMP generators for {id}.
-          static {}_FCMP_GENERATORS:
+          pub static {}_FCMP_GENERATORS:
             std_shims::sync::LazyLock<monero_generators::FcmpGenerators<helioselene::{}>> =
               std_shims::sync::LazyLock::new(|| monero_generators::FcmpGenerators {{
                 generators: generalized_bulletproofs::Generators::new(
@@ -174,10 +175,10 @@ fn generators() {
       format!(
         "
           /// The FCMP generators for Helios.
-          static HELIOS_FCMP_GENERATORS: LazyLock<monero_generators::FcmpGenerators<Helios>> =
+          pub static HELIOS_FCMP_GENERATORS: LazyLock<monero_generators::FcmpGenerators<Helios>> =
             LazyLock::new(monero_generators::FcmpGenerators::<Helios>::new);
           /// The FCMP generators for Selene.
-          static SELENE_FCMP_GENERATORS: LazyLock<monero_generators::FcmpGenerators<Selene>> =
+          pub static SELENE_FCMP_GENERATORS: LazyLock<monero_generators::FcmpGenerators<Selene>> =
             LazyLock::new(monero_generators::FcmpGenerators::<Selene>::new);
       ",
       )

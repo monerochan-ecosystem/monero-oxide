@@ -77,7 +77,9 @@ impl FcmpCurves for Curves {
 
 include!(concat!(env!("OUT_DIR"), "/generators.rs"));
 
-static FCMP_PARAMS: LazyLock<FcmpParams<Curves>> = LazyLock::new(|| {
+/// The parameters for an FCMP.
+// TODO: Don't expose this directly
+pub static FCMP_PARAMS: LazyLock<FcmpParams<Curves>> = LazyLock::new(|| {
   FcmpParams::<Curves>::new(
     SELENE_FCMP_GENERATORS.generators.clone(),
     HELIOS_FCMP_GENERATORS.generators.clone(),
