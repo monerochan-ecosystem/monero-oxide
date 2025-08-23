@@ -14,7 +14,7 @@ use helioselene::{HeliosPoint, SelenePoint, Helios, Selene};
 use monero_io::{write_varint, decompress_point};
 
 mod hash_to_point;
-pub use hash_to_point::biased_hash_to_point;
+pub use hash_to_point::{biased_hash_to_point, hash_to_point};
 
 #[cfg(test)]
 mod tests;
@@ -51,15 +51,15 @@ pub fn H_pow_2() -> &'static [EdwardsPoint; 64] {
 
 /// Monero's `T`, used to blind the key-image commitment present within output keys.
 pub static T: LazyLock<EdwardsPoint> =
-  LazyLock::new(|| biased_hash_to_point(keccak256(b"Monero Generator T")));
+  LazyLock::new(|| hash_to_point(keccak256(b"Monero Generator T")));
 
 /// FCMP++s's key-image generator blinding generator `U`.
-pub static FCMP_U: LazyLock<EdwardsPoint> =
-  LazyLock::new(|| biased_hash_to_point(keccak256(b"Monero FCMP++ Generator U")));
+pub static FCMP_PLUS_PLUS_U: LazyLock<EdwardsPoint> =
+  LazyLock::new(|| hash_to_point(keccak256(b"Monero FCMP++ Generator U")));
 
 /// FCMP++s's randomness commitment generator `V`.
-pub static FCMP_V: LazyLock<EdwardsPoint> =
-  LazyLock::new(|| biased_hash_to_point(keccak256(b"Monero FCMP++ Generator V")));
+pub static FCMP_PLUS_PLUS_V: LazyLock<EdwardsPoint> =
+  LazyLock::new(|| hash_to_point(keccak256(b"Monero FCMP++ Generator V")));
 
 /// The maximum amount of input tuples provable for within a single FCMP.
 // https://github.com/seraphis-migration/monero

@@ -11,7 +11,7 @@ use ciphersuite::{
 use helioselene::{Selene, Helios};
 use ec_divisors::{DivisorCurve, ScalarDecomposition};
 
-use monero_generators::{T, FCMP_U, FCMP_V};
+use monero_generators::{T, FCMP_PLUS_PLUS_U, FCMP_PLUS_PLUS_V};
 
 use crate::{
   SELENE_FCMP_GENERATORS, HELIOS_FCMP_GENERATORS, SELENE_HASH_INIT, FCMP_PARAMS, Output,
@@ -74,8 +74,8 @@ fn test() {
         ScalarDecomposition::new(rerandomized_output.o_blind()).unwrap(),
       ),
       IBlind::new(
-        EdwardsPoint(*FCMP_U),
-        EdwardsPoint(*FCMP_V),
+        EdwardsPoint(*FCMP_PLUS_PLUS_U),
+        EdwardsPoint(*FCMP_PLUS_PLUS_V),
         ScalarDecomposition::new(rerandomized_output.i_blind()).unwrap(),
       ),
       IBlindBlind::new(

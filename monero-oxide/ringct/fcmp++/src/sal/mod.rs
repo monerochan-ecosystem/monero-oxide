@@ -15,7 +15,7 @@ use ciphersuite::{
   Ciphersuite, Ed25519,
 };
 
-use monero_generators::{T, FCMP_U, FCMP_V};
+use monero_generators::{T, FCMP_PLUS_PLUS_U, FCMP_PLUS_PLUS_V};
 
 use crate::{Input, Output};
 
@@ -52,8 +52,8 @@ impl RerandomizedOutput {
     let r_c = <Ed25519 as Ciphersuite>::F::random(&mut *rng);
 
     let O_tilde = output.O() + (EdwardsPoint(*T) * r_o);
-    let I_tilde = output.I() + (EdwardsPoint(*FCMP_U) * r_i);
-    let R = (EdwardsPoint(*FCMP_V) * r_i) + (EdwardsPoint(*T) * r_r_i);
+    let I_tilde = output.I() + (EdwardsPoint(*FCMP_PLUS_PLUS_U) * r_i);
+    let R = (EdwardsPoint(*FCMP_PLUS_PLUS_V) * r_i) + (EdwardsPoint(*T) * r_r_i);
     let C_tilde = output.C() + (<Ed25519 as Ciphersuite>::generator() * r_c);
 
     RerandomizedOutput { input: Input { O_tilde, I_tilde, R, C_tilde }, r_o, r_i, r_r_i, r_c }
@@ -206,8 +206,8 @@ impl SpendAuthAndLinkability {
   ) -> (<Ed25519 as Ciphersuite>::G, SpendAuthAndLinkability) {
     let G = <Ed25519 as Ciphersuite>::G::generator();
     let T_ = EdwardsPoint(*T);
-    let U = EdwardsPoint(*FCMP_U);
-    let V = EdwardsPoint(*FCMP_V);
+    let U = EdwardsPoint(*FCMP_PLUS_PLUS_U);
+    let V = EdwardsPoint(*FCMP_PLUS_PLUS_V);
 
     let L = (opening.input.I_tilde * opening.x) - (U * (opening.r_i * opening.x));
 
@@ -269,8 +269,8 @@ impl SpendAuthAndLinkability {
   ) {
     let G = <Ed25519 as Ciphersuite>::G::generator();
     let T_ = EdwardsPoint(*T);
-    let U = EdwardsPoint(*FCMP_U);
-    let V = EdwardsPoint(*FCMP_V);
+    let U = EdwardsPoint(*FCMP_PLUS_PLUS_U);
+    let V = EdwardsPoint(*FCMP_PLUS_PLUS_V);
 
     let e = Self::challenge(
       signable_tx_hash,

@@ -21,7 +21,7 @@ use modular_frost::{
   curve::Curve, FrostError, Participant, ThresholdKeys, ThresholdView, algorithm::Algorithm,
 };
 
-use monero_generators::{T, FCMP_U, FCMP_V};
+use monero_generators::{T, FCMP_PLUS_PLUS_U, FCMP_PLUS_PLUS_V};
 
 use crate::sal::*;
 
@@ -146,8 +146,8 @@ impl<R: Send + Sync + Clone + RngCore + CryptoRng, T: Sync + Clone + Debug + Tra
 
     let G = <Ed25519 as Ciphersuite>::G::generator();
     let T_ = EdwardsPoint(*T);
-    let U = EdwardsPoint(*FCMP_U);
-    let V = EdwardsPoint(*FCMP_V);
+    let U = EdwardsPoint(*FCMP_PLUS_PLUS_U);
+    let V = EdwardsPoint(*FCMP_PLUS_PLUS_V);
 
     // We deterministically derive all the nonces which aren't for the `y` parameter as that's the
     // only variable considered private by this protocol
@@ -332,8 +332,9 @@ impl<R: Send + Sync + Clone + RngCore + CryptoRng, T: Sync + Clone + Debug + Tra
 
     transcript.append_message(b"x", x.to_repr());
 
-    let L =
-      (rerandomized_output.input.I_tilde - (EdwardsPoint(*FCMP_U) * rerandomized_output.r_i)) * x;
+    let L = (rerandomized_output.input.I_tilde -
+      (EdwardsPoint(*FCMP_PLUS_PLUS_U) * rerandomized_output.r_i)) *
+      x;
 
     Self { rng, transcript, signable_tx_hash, rerandomized_output, x, L, partial: None, e: None }
   }

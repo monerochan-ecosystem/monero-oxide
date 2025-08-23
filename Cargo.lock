@@ -987,6 +987,7 @@ dependencies = [
 name = "monero-generators"
 version = "0.4.0"
 dependencies = [
+ "blake2",
  "ciphersuite",
  "crypto-bigint",
  "curve25519-dalek",
