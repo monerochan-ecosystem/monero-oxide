@@ -351,16 +351,36 @@ where
       r.push(ScalarVector::new(0));
     }
 
-    let mut l_weights = ScalarVector::new(n);
-    let mut r_weights = ScalarVector::new(n);
-    let mut o_weights = ScalarVector::new(n);
-    for (constraint, z) in self.constraints.iter().zip(&z.0) {
-      accumulate_vector(&mut l_weights, &constraint.WL, *z);
-      accumulate_vector(&mut r_weights, &constraint.WR, *z);
-      accumulate_vector(&mut o_weights, &constraint.WO, *z);
-    }
+    let (l_weights, r_weights, o_weights) = {
+      let mut l_weights = ScalarVector::new(n);
+      let mut r_weights = ScalarVector::new(n);
+      let mut o_weights = ScalarVector::new(n);
+      /*
+        Track the index of the highest element within this vector actually used.
 
-    l[ilr] = r_weights * &y_inv;
+        This allows us to truncate it after, saving operations over values we know will be zero.
+
+        `l_hi, r_hi` are pre-initialized to lengths we know the resulting vector will need to be to
+        incorprate additional terms once actually placed in the `l, r` polynomials.
+      */
+      let mut l_hi = witness.aR.len();
+      let mut r_hi = witness.aL.len();
+      let mut o_hi = 0;
+      for (constraint, z) in self.constraints.iter().zip(&z.0) {
+        l_hi = l_hi.max(accumulate_vector(&mut l_weights, &constraint.WL, *z));
+        r_hi = r_hi.max(accumulate_vector(&mut r_weights, &constraint.WR, *z));
+        o_hi = o_hi.max(accumulate_vector(&mut o_weights, &constraint.WO, *z));
+      }
+      l_weights.0.truncate(l_hi + 1);
+      r_weights.0.truncate(r_hi + 1);
+      o_weights.0.truncate(o_hi + 1);
+      (l_weights, r_weights, o_weights)
+    };
+
+    l[ilr] = r_weights;
+    for (dest, weight) in l[ilr].0.iter_mut().zip(&y_inv.0) {
+      *dest *= weight;
+    }
     for (dest, src) in l[ilr].0.iter_mut().zip(&witness.aL.0) {
       *dest += src;
     }
@@ -370,7 +390,13 @@ where
     for (dest, (src_a, src_b)) in r[jlr].0.iter_mut().zip(witness.aR.0.iter().zip(&y.0)) {
       *dest += *src_a * *src_b;
     }
-    r[jo] = o_weights - &y;
+    r[jo] = ScalarVector::new(n);
+    for (dest, (o, y)) in r[jo].0.iter_mut().zip(o_weights.0.iter().zip(&y.0)) {
+      *dest = *o - *y;
+    }
+    for i in o_weights.len() .. n {
+      r[jo][i] = -y[i];
+    }
     r[js] = sR * &y;
 
     // We now fill in the vector commitments
@@ -380,11 +406,13 @@ where
     let mut cg_weights = Vec::with_capacity(witness.c.len());
     for i in 0 .. witness.c.len() {
       let mut cg = ScalarVector::new(n);
+      let mut cg_hi = 0;
       for (constraint, z) in self.constraints.iter().zip(&z.0) {
         if let Some(WCG) = constraint.WCG.get(i) {
-          accumulate_vector(&mut cg, WCG, *z);
+          cg_hi = cg_hi.max(accumulate_vector(&mut cg, WCG, *z));
         }
       }
+      cg.0.truncate(cg_hi + 1);
       cg_weights.push(cg);
     }
 
@@ -404,9 +432,9 @@ where
     for (i, l) in l.iter().enumerate() {
       for (j, r) in r.iter().enumerate() {
         let new_coeff = i + j;
-        if !(l.is_empty() || r.is_empty()) {
-          t[new_coeff] += l.inner_product(r.0.iter());
-        };
+        for (l, r) in l.0.iter().zip(&r.0) {
+          t[new_coeff] += *l * r;
+        }
       }
     }
 
@@ -436,9 +464,6 @@ where
     let poly_eval = |poly: &[ScalarVector<C::F>], x: &ScalarVector<C::F>| -> ScalarVector<_> {
       let mut res = ScalarVector::<C::F>::new(n);
       for (i, coeff) in poly.iter().enumerate() {
-        if coeff.is_empty() {
-          continue;
-        }
         for (res, coeff) in res.0.iter_mut().zip(coeff.0.iter()) {
           *res += *coeff * x[i];
         }

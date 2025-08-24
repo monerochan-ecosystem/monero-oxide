@@ -216,12 +216,20 @@ impl<F: PrimeField> LinComb<F> {
   }
 }
 
+/// Accumulate a sparse vector into an accumulator with a multiplicative weight applied.
+///
+/// This is equivalent to `accumulator += values * weight`, if `values` was a normal vector.
+///
+/// Returns the highest index written to during accumulation.
 pub(crate) fn accumulate_vector<F: PrimeField>(
   accumulator: &mut ScalarVector<F>,
   values: &[(usize, F)],
   weight: F,
-) {
+) -> usize {
+  let mut hi = 0;
   for (i, coeff) in values {
     accumulator[*i] += *coeff * weight;
+    hi = hi.max(*i);
   }
+  hi
 }
