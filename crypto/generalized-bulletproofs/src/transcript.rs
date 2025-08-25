@@ -209,6 +209,6 @@ impl<'a> VerifierTranscript<'a> {
 
   /// Complete this transcript, returning what remains of the bytes intended for the proof.
   pub fn complete(self) -> &'a [u8] {
-    self.proof
+    self.transcript
   }
 }
