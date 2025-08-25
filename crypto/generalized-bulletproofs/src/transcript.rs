@@ -206,4 +206,9 @@ impl<'a> VerifierTranscript<'a> {
     self.digest.update([CHALLENGE]);
     self.digest.clone().finalize().into()
   }
+
+  /// Complete this transcript, returning what remains of the bytes intended for the proof.
+  pub fn complete(self) -> &'a [u8] {
+    self.proof
+  }
 }
