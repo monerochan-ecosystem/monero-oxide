@@ -74,14 +74,16 @@ impl Transcript {
     Self { digest, transcript: Vec::with_capacity(1024) }
   }
 
-  pub(crate) fn push_scalar(&mut self, scalar: impl PrimeField) {
+  /// Write a scalar onto the transcript.
+  pub fn push_scalar(&mut self, scalar: impl PrimeField) {
     self.digest.update([SCALAR]);
     let bytes = scalar.to_repr();
     self.digest.update(bytes);
     self.transcript.extend(bytes.as_ref());
   }
 
-  pub(crate) fn push_point(&mut self, point: &impl GroupEncoding) {
+  /// Write a point onto the transcript.
+  pub fn push_point(&mut self, point: &impl GroupEncoding) {
     self.digest.update([POINT]);
     let bytes = point.to_bytes();
     self.digest.update(bytes);
@@ -139,7 +141,8 @@ impl<'a> VerifierTranscript<'a> {
     Self { digest, transcript: proof }
   }
 
-  pub(crate) fn read_scalar<C: Ciphersuite>(&mut self) -> io::Result<C::F> {
+  /// Read a scalar from the transcript.
+  pub fn read_scalar<C: Ciphersuite>(&mut self) -> io::Result<C::F> {
     // Read the scalar onto the transcript using the serialization present in the transcript
     self.digest.update([SCALAR]);
     let scalar_len = <C::F as PrimeField>::Repr::default().as_ref().len();
@@ -153,7 +156,8 @@ impl<'a> VerifierTranscript<'a> {
     Ok(scalar)
   }
 
-  pub(crate) fn read_point<C: Ciphersuite>(&mut self) -> io::Result<C::G> {
+  /// Read a point from the transcript.
+  pub fn read_point<C: Ciphersuite>(&mut self) -> io::Result<C::G> {
     // Read the point onto the transcript using the serialization present in the transcript
     self.digest.update([POINT]);
     let point_len = <C::G as GroupEncoding>::Repr::default().as_ref().len();
@@ -167,7 +171,7 @@ impl<'a> VerifierTranscript<'a> {
     Ok(point)
   }
 
-  /// Read the Pedersen (Vector) Commitments from the transcript.
+  /// Read the Pedersen (vector) Commitments from the transcript.
   ///
   /// The lengths of the vectors are not transcripted.
   #[allow(clippy::type_complexity)]
