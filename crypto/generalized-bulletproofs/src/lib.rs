@@ -60,6 +60,7 @@ pub struct Generators<C: Ciphersuite> {
 
 /// A batch verifier of proofs.
 #[must_use]
+#[derive(Clone)]
 pub struct BatchVerifier<C: Ciphersuite> {
   /// The summed scalar for the G generator.
   pub g: C::F,
