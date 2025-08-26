@@ -6,29 +6,7 @@ use dalek_ff_group::FieldElement;
 
 use crate::keccak256;
 
-/// Monero's `hash_to_ec` function.
-///
-/// This achieves parity with https://github.com/monero-project/monero
-///   /blob/389e3ba1df4a6df4c8f9d116aa239d4c00f5bc78/src/crypto/crypto.cpp#L611, inlining the
-/// `ge_fromfe_frombytes_vartime` function (https://github.com/monero-project/monero
-///   /blob/389e3ba1df4a6df4c8f9d116aa239d4c00f5bc78/src/crypto/crypto-ops.c#L2309). This
-/// implementation runs in constant time.
-///
-/// According to the original authors
-/// (https://web.archive.org/web/20201028121818/https://cryptonote.org/whitepaper.pdf), this would
-/// implement https://arxiv.org/abs/0706.1448. Shen Noether also describes the algorithm
-/// (https://web.getmonero.org/resources/research-lab/pubs/ge_fromfe.pdf), yet without reviewing
-/// its security and in a very straight-forward fashion.
-///
-/// In reality, this implements Elligator 2 as detailed in
-/// "Elligator: Elliptic-curve points indistinguishable from uniform random strings"
-/// (https://eprint.iacr.org/2013/325). Specifically, Section 5.5 details the application of
-/// Elligator 2 to Curve25519, after which the result is mapped to Ed25519.
-///
-/// As this only applies Elligator 2 once, it's limited to a subset of points where a certain
-/// derivative of their `u` coordinates (in Montgomery form) are quadratic residues. It's biased
-/// accordingly.
-pub fn biased_hash_to_point(bytes: [u8; 32]) -> EdwardsPoint {
+fn elligator2_with_uniform_bytes_input(bytes: [u8; 32]) -> EdwardsPoint {
   /*
     Curve25519 is a Montgomery curve with equation `v^2 = u^3 + 486662 u^2 + u`.
 
@@ -41,7 +19,7 @@ pub fn biased_hash_to_point(bytes: [u8; 32]) -> EdwardsPoint {
   const MODULUS: U256 = U256::ONE.shl_vartime(255).wrapping_sub(&U256::from_u64(19));
   const NEGATIVE_A: FieldElement = FieldElement::from_u256(&MODULUS.wrapping_sub(&A_U256));
 
-  // Sample a FieldElement
+  // Convert the uniform bytes to a FieldElement
   let r = {
     use crypto_bigint::Encoding;
     /*
@@ -55,7 +33,7 @@ pub fn biased_hash_to_point(bytes: [u8; 32]) -> EdwardsPoint {
 
       which is of negligible probability.
     */
-    FieldElement::from_u256(&U256::from_le_bytes(keccak256(&bytes)))
+    FieldElement::from_u256(&U256::from_le_bytes(bytes))
   };
 
   // Per Section 5.5, take `u = 2`. This is the smallest quadratic non-residue in the field
@@ -104,4 +82,41 @@ pub fn biased_hash_to_point(bytes: [u8; 32]) -> EdwardsPoint {
 
   // Ensure this point lies within the prime-order subgroup
   res.mul_by_cofactor()
+}
+
+/// Monero's `hash_to_ec` function.
+///
+/// This achieves parity with https://github.com/monero-project/monero
+///   /blob/389e3ba1df4a6df4c8f9d116aa239d4c00f5bc78/src/crypto/crypto.cpp#L611, inlining the
+/// `ge_fromfe_frombytes_vartime` function (https://github.com/monero-project/monero
+///   /blob/389e3ba1df4a6df4c8f9d116aa239d4c00f5bc78/src/crypto/crypto-ops.c#L2309). This
+/// implementation runs in constant time.
+///
+/// According to the original authors
+/// (https://web.archive.org/web/20201028121818/https://cryptonote.org/whitepaper.pdf), this would
+/// implement https://arxiv.org/abs/0706.1448. Shen Noether also describes the algorithm
+/// (https://web.getmonero.org/resources/research-lab/pubs/ge_fromfe.pdf), yet without reviewing
+/// its security and in a very straight-forward fashion.
+///
+/// In reality, this implements Elligator 2 as detailed in
+/// "Elligator: Elliptic-curve points indistinguishable from uniform random strings"
+/// (https://eprint.iacr.org/2013/325). Specifically, Section 5.5 details the application of
+/// Elligator 2 to Curve25519, after which the result is mapped to Ed25519.
+///
+/// As this only applies Elligator 2 once, it's limited to a subset of points where a certain
+/// derivative of their `u` coordinates (in Montgomery form) are quadratic residues. It's biased
+/// accordingly.
+pub fn biased_hash_to_point(bytes: [u8; 32]) -> EdwardsPoint {
+  elligator2_with_uniform_bytes_input(keccak256(&bytes))
+}
+
+/// A non-biased hash to point.
+///
+/// This internally invokes `biased_hash_to_point` twice, summing the results, which has been
+/// demonstrated to generate the entire elliptic curve with minimal bias.
+pub fn hash_to_point(bytes: [u8; 32]) -> EdwardsPoint {
+  use blake2::Digest;
+  let hashed: [u8; 64] = blake2::Blake2b512::digest(bytes).into();
+  elligator2_with_uniform_bytes_input(hashed[.. 32].try_into().unwrap()) +
+    elligator2_with_uniform_bytes_input(hashed[32 ..].try_into().unwrap())
 }

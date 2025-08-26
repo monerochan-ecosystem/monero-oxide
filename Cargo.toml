@@ -1,6 +1,14 @@
 [workspace]
 resolver = "2"
 members = [
+  "crypto/helioselene",
+
+  "crypto/divisors",
+  "crypto/generalized-bulletproofs",
+  "crypto/fcmps/circuit-abstraction",
+  "crypto/fcmps/ec-gadgets",
+  "crypto/fcmps",
+
   "monero-oxide/io",
   "monero-oxide/generators",
   "monero-oxide/primitives",
@@ -8,6 +16,7 @@ members = [
   "monero-oxide/ringct/clsag",
   "monero-oxide/ringct/borromean",
   "monero-oxide/ringct/bulletproofs",
+  "monero-oxide/ringct/fcmp++",
   "monero-oxide",
 
   "monero-oxide/rpc",
@@ -33,17 +42,30 @@ group = { opt-level = 3 }
 
 crypto-bigint = { opt-level = 3 }
 dalek-ff-group = { opt-level = 3 }
+helioselene = { opt-level = 3 }
 
 multiexp = { opt-level = 3 }
 
-monero-oxide = { opt-level = 3 }
+ec-divisors = { opt-level = 3 }
+generalized-bulletproofs = { opt-level = 3 }
+generalized-bulletproofs-circuit-abstraction = { opt-level = 3 }
+generalized-bulletproofs-ec-gadgets = { opt-level = 3 }
+full-chain-membership-proofs = { opt-level = 3 }
+
+monero-borromean = { opt-level = 3 }
+monero-bulletproofs = { opt-level = 3 }
+monero-mlsag = { opt-level = 3 }
+monero-clsag = { opt-level = 3 }
+monero-fcmp-plus-plus = { opt-level = 3 }
 
 [profile.release]
 panic = "unwind"
 overflow-checks = true
 
 [workspace.lints.clippy]
+incompatible_msrv = "allow" # Manually checked with a GitHub workflow
 unwrap_or_default = "allow"
+map_unwrap_or = "allow"
 borrow_as_ptr = "deny"
 cast_lossless = "deny"
 cast_possible_truncation = "deny"
@@ -71,7 +93,6 @@ manual_instant_elapsed = "deny"
 manual_let_else = "deny"
 manual_ok_or = "deny"
 manual_string_new = "deny"
-map_unwrap_or = "deny"
 match_bool = "deny"
 match_same_arms = "deny"
 missing_fields_in_debug = "deny"

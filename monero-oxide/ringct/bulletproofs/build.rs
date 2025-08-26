@@ -9,7 +9,7 @@ use std::{
 fn generators(prefix: &'static str, path: &str) {
   use curve25519_dalek::EdwardsPoint;
 
-  use monero_generators::bulletproofs_generators;
+  use monero_generators::BulletproofGenerators;
 
   fn serialize(generators_string: &mut String, points: &[EdwardsPoint]) {
     for generator in points {
@@ -27,7 +27,7 @@ fn generators(prefix: &'static str, path: &str) {
     }
   }
 
-  let generators = bulletproofs_generators(prefix.as_bytes());
+  let generators = BulletproofGenerators::new(prefix.as_bytes());
   #[allow(non_snake_case)]
   let mut G_str = String::new();
   serialize(&mut G_str, &generators.G);
@@ -42,14 +42,15 @@ fn generators(prefix: &'static str, path: &str) {
     .write_all(
       format!(
         "
-          pub(crate) static GENERATORS: LazyLock<Generators> = LazyLock::new(|| Generators {{
-            G: std_shims::vec![
-              {G_str}
-            ],
-            H: std_shims::vec![
-              {H_str}
-            ],
-          }});
+          pub(crate) static GENERATORS: LazyLock<BulletproofGenerators> =
+            LazyLock::new(|| BulletproofGenerators {{
+              G: std_shims::vec![
+                {G_str}
+              ],
+              H: std_shims::vec![
+                {H_str}
+              ],
+            }});
         ",
       )
       .as_bytes(),
@@ -66,8 +67,8 @@ fn generators(prefix: &'static str, path: &str) {
     .write_all(
       format!(
         r#"
-        pub(crate) static GENERATORS: LazyLock<Generators> = LazyLock::new(|| {{
-          monero_generators::bulletproofs_generators(b"{prefix}")
+        pub(crate) static GENERATORS: LazyLock<BulletproofGenerators> = LazyLock::new(|| {{
+          monero_generators::BulletproofGenerators::new(b"{prefix}")
         }});
       "#,
       )

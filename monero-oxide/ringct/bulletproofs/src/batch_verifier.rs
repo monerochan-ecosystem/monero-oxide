@@ -7,7 +7,7 @@ use curve25519_dalek::{
   edwards::EdwardsPoint,
 };
 
-use monero_generators::{H as MONERO_H, Generators};
+use monero_generators::{H as MONERO_H, BulletproofGenerators};
 
 use crate::{original, plus};
 
@@ -22,7 +22,7 @@ pub(crate) struct InternalBatchVerifier {
 
 impl InternalBatchVerifier {
   #[must_use]
-  fn verify(self, G: EdwardsPoint, H: EdwardsPoint, generators: &Generators) -> bool {
+  fn verify(self, G: EdwardsPoint, H: EdwardsPoint, generators: &BulletproofGenerators) -> bool {
     /*
       Technically, this following line can overflow, and joining these `Vec`s _may_ panic if
       they're individually acceptable lengths yet their sum isn't. This is so negligible, due to
