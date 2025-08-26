@@ -5,7 +5,9 @@ use ciphersuite::{group::ff::FromUniformBytes, Ciphersuite};
 use generalized_bulletproofs::{
   PedersenVectorCommitment, ProofGenerators,
   transcript::Commitments,
-  arithmetic_circuit_proof::{AcError, ArithmeticCircuitStatement, ArithmeticCircuitWitness},
+  arithmetic_circuit_proof::{
+    AcStatementError, ArithmeticCircuitStatement, ArithmeticCircuitWitness,
+  },
 };
 pub(crate) use generalized_bulletproofs::arithmetic_circuit_proof::{Variable, LinComb};
 
@@ -188,7 +190,10 @@ where
     self,
     generators: ProofGenerators<'_, C>,
     commitments: Commitments<C>,
-  ) -> Result<(ArithmeticCircuitStatement<'_, C>, Option<ArithmeticCircuitWitness<C>>), AcError> {
+  ) -> Result<
+    (ArithmeticCircuitStatement<'_, C>, Option<ArithmeticCircuitWitness<C>>),
+    AcStatementError,
+  > {
     self.0.statement(generators, commitments)
   }
 }

@@ -60,8 +60,16 @@ fn random_params(
   let V = <Ed25519 as Ciphersuite>::G::random(&mut OsRng);
 
   let params = FcmpParams::<MoneroCurves>::new(
-    generalized_bulletproofs::tests::generators::<Selene>(2 * (input_limit * 256)),
-    generalized_bulletproofs::tests::generators::<Helios>(2 * (input_limit * 128)),
+    generalized_bulletproofs::tests::insecure_test_generators::<_, Selene>(
+      &mut OsRng,
+      2 * (input_limit * 256),
+    )
+    .unwrap(),
+    generalized_bulletproofs::tests::insecure_test_generators::<_, Helios>(
+      &mut OsRng,
+      2 * (input_limit * 128),
+    )
+    .unwrap(),
     // Hash init generators
     <Selene as Ciphersuite>::G::random(&mut OsRng),
     <Helios as Ciphersuite>::G::random(&mut OsRng),

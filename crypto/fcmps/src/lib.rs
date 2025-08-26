@@ -27,7 +27,7 @@ use ec_divisors::DivisorCurve;
 use generalized_bulletproofs::{
   BatchVerifier, PedersenVectorCommitment,
   transcript::{Transcript as ProverTranscript, VerifierTranscript},
-  arithmetic_circuit_proof::AcError,
+  arithmetic_circuit_proof::{AcStatementError, AcProveError, AcVerifyError},
 };
 
 mod gadgets;
@@ -163,17 +163,31 @@ pub enum FcmpError {
   EmptyProof,
   /// A propagated IO error.
   IoError(io::Error),
-  /// A propagated arithmetic circuit error.
-  AcError(AcError),
+  /// A propagated arithmetic circuit statement error.
+  AcStatementError(AcStatementError),
+  /// A propagated arithmetic circuit prover error.
+  AcProveError(AcProveError),
+  /// A propagated arithmetic circuit verifier error.
+  AcVerifyError(AcVerifyError),
 }
 impl From<io::Error> for FcmpError {
   fn from(err: io::Error) -> Self {
     FcmpError::IoError(err)
   }
 }
-impl From<AcError> for FcmpError {
-  fn from(err: AcError) -> Self {
-    FcmpError::AcError(err)
+impl From<AcStatementError> for FcmpError {
+  fn from(err: AcStatementError) -> Self {
+    FcmpError::AcStatementError(err)
+  }
+}
+impl From<AcProveError> for FcmpError {
+  fn from(err: AcProveError) -> Self {
+    FcmpError::AcProveError(err)
+  }
+}
+impl From<AcVerifyError> for FcmpError {
+  fn from(err: AcVerifyError) -> Self {
+    FcmpError::AcVerifyError(err)
   }
 }
 
@@ -674,7 +688,7 @@ where
         .commitments
         .into_iter()
         .zip(pvc_blinds_1.iter())
-        .map(|(g_values, mask)| PedersenVectorCommitment { g_values: g_values.into(), mask: *mask })
+        .map(|(g_values, mask)| PedersenVectorCommitment { g_values, mask: *mask })
         .collect(),
     );
     let mut c2_circuit = Circuit::<C::C2>::prove(
@@ -682,7 +696,7 @@ where
         .commitments
         .into_iter()
         .zip(pvc_blinds_2.iter())
-        .map(|(g_values, mask)| PedersenVectorCommitment { g_values: g_values.into(), mask: *mask })
+        .map(|(g_values, mask)| PedersenVectorCommitment { g_values, mask: *mask })
         .collect(),
     );
 

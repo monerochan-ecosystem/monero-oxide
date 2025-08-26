@@ -2,26 +2,11 @@ use std_shims::{vec, vec::Vec};
 
 use multiexp::multiexp_vartime;
 use ciphersuite::{
-  group::ff::{Field, FromUniformBytes},
+  group::ff::{Field, FromUniformBytes, BatchInvert},
   Ciphersuite,
 };
 
-#[rustfmt::skip]
 use crate::{ScalarVector, PointVector, ProofGenerators, BatchVerifier, transcript::*};
-
-/// An error from proving/verifying Inner-Product statements.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum IpError {
-  /// An incorrect amount of generators was provided.
-  IncorrectAmountOfGenerators,
-  /// The witness was inconsistent to the statement.
-  ///
-  /// Sanity checks on the witness are always performed. If the library is compiled with debug
-  /// assertions on, whether or not this witness actually opens `P` is checked.
-  InconsistentWitness,
-  /// The proof wasn't complete and the necessary values could not be read from the transcript.
-  IncompleteProof,
-}
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub(crate) enum P<C: Ciphersuite> {
@@ -55,9 +40,7 @@ pub(crate) struct IpWitness<C: Ciphersuite> {
 impl<C: Ciphersuite> IpWitness<C> {
   /// Construct a new witness for an Inner-Product statement.
   ///
-  /// If the witness is less than a power of two, it is padded to the nearest power of two.
-  ///
-  /// This functions return None if the lengths of a, b are mismatched or either are empty.
+  /// This functions return `None` if `a.is_empty() || (a.len() != b.len())`.
   pub(crate) fn new(a: ScalarVector<C::F>, b: ScalarVector<C::F>) -> Option<Self> {
     if a.0.is_empty() || (a.len() != b.len()) {
       None?;
@@ -74,34 +57,57 @@ where
   ///
   /// This does not perform any transcripting of any variables within this statement. They must be
   /// deterministic to the existing transcript.
+  //
+  /// Returns `None` if `generators.h_bold_slice().len() != h_bold_weights.len()`.
   pub(crate) fn new(
     generators: ProofGenerators<'a, C>,
     h_bold_weights: ScalarVector<C::F>,
     u: C::F,
     P: P<C>,
-  ) -> Result<Self, IpError> {
+  ) -> Option<Self> {
     if generators.h_bold_slice().len() != h_bold_weights.len() {
-      Err(IpError::IncorrectAmountOfGenerators)?
+      None?;
     }
-    Ok(Self { generators, h_bold_weights, u, P })
+    Some(Self { generators, h_bold_weights, u, P })
   }
+}
 
+/// An error from proving Inner-Product statements.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum IpProveError {
+  /// An incorrect amount of generators was provided.
+  IncorrectAmountOfGenerators,
+  /// The witness was inconsistent to the statement.
+  ///
+  /// Sanity checks on the witness are always performed. This library may also check whether or not
+  /// the witness actually opens the statement (such as if `debug_assertions = on`), and if so, may
+  /// return this error if the witness is perceived as inconsistent with the statement.
+  InconsistentWitness,
+}
+
+impl<'a, C: Ciphersuite> IpStatement<'a, C>
+where
+  C::F: FromUniformBytes<64>,
+{
   /// Prove for this Inner-Product statement.
   ///
-  /// Returns an error if this statement couldn't be proven for (such as if the witness isn't
-  /// consistent).
+  /// This function executes in constant-time to all secrets as the witness is not considered a
+  /// secret (as a Bulletproof is not a zero-knowledge proof).
   pub(crate) fn prove(
     self,
     transcript: &mut Transcript,
     witness: IpWitness<C>,
-  ) -> Result<(), IpError> {
+  ) -> Result<(), IpProveError> {
     let (mut g_bold, mut h_bold, u, mut P, mut a, mut b) = {
       let IpStatement { generators, h_bold_weights, u, P } = self;
       let u = generators.g() * u;
 
-      // Ensure we have the exact amount of generators
-      if generators.g_bold_slice().len() != witness.a.len().next_power_of_two() {
-        Err(IpError::IncorrectAmountOfGenerators)?;
+      // Ensure we have the necessary amount of generators
+      if witness.a.len() > ((usize::MAX >> 1) + 1) {
+        Err(IpProveError::IncorrectAmountOfGenerators)?;
+      }
+      if generators.g_bold_slice().len() < witness.a.len().next_power_of_two() {
+        Err(IpProveError::IncorrectAmountOfGenerators)?;
       }
       // Acquire a local copy of the generators
       let g_bold = PointVector::<C>(generators.g_bold_slice().to_vec());
@@ -123,7 +129,7 @@ where
         let bh = b.0.iter().copied().zip(h_bold.0.iter().copied());
         let cu = core::iter::once((a.inner_product(b.0.iter()), u));
         if P != multiexp_vartime(&ag.chain(bh).chain(cu).collect::<Vec<_>>()) {
-          Err(IpError::InconsistentWitness)?;
+          Err(IpProveError::InconsistentWitness)?;
         }
       }
 
@@ -145,15 +151,17 @@ where
 
       // Sanity
       debug_assert_eq!(a1.len(), n_hat);
+      debug_assert!(a2.len() <= n_hat);
       debug_assert_eq!(b1.len(), n_hat);
+      debug_assert!(b2.len() <= n_hat);
       debug_assert_eq!(g_bold1.len(), n_hat);
       debug_assert_eq!(g_bold2.len(), n_hat);
       debug_assert_eq!(h_bold1.len(), n_hat);
       debug_assert_eq!(h_bold2.len(), n_hat);
 
       // cl, cr, lines 21-22
-      let cl = b2.inner_product(a1.0.iter());
-      let cr = a2.inner_product(b1.0.iter());
+      let cl = b2.inner_product_without_length_checks(a1.0.iter());
+      let cr = a2.inner_product_without_length_checks(b1.0.iter());
 
       let L = {
         let mut L_terms = Vec::with_capacity(1 + (2 * g_bold1.len()));
@@ -184,7 +192,7 @@ where
       transcript.push_point(&L);
       transcript.push_point(&R);
       let x: C::F = transcript.challenge::<C>();
-      let x_inv = x.invert().unwrap();
+      let x_inv = x.invert().expect("transcript challenge was 0");
 
       // The prover and verifier now calculate the following (28-31)
       g_bold = PointVector(Vec::with_capacity(g_bold1.len()));
@@ -223,7 +231,19 @@ where
     transcript.push_scalar(b[0]);
     Ok(())
   }
+}
 
+/// An error from verifying Inner-Product statements.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum IpVerifyError {
+  /// The proof wasn't complete and the necessary values could not be read from the transcript.
+  IncompleteProof,
+}
+
+impl<'a, C: Ciphersuite> IpStatement<'a, C>
+where
+  C::F: FromUniformBytes<64>,
+{
   /*
   This has room for optimization worth investigating further. It currently takes
   an iterative approach. It can be optimized further via divide and conquer.
@@ -271,20 +291,21 @@ where
 
   /// Queue an Inner-Product proof for batch verification.
   ///
-  /// This will return Err if there is an error. This will return Ok if the proof was successfully
-  /// queued for batch verification. The caller is required to verify the batch in order to ensure
-  /// the proof is actually correct.
+  /// This will return `Err(_)` if there is an error. This will return `Ok(_)` if the proof was
+  /// successfully queued for batch verification. The caller is required to verify the batch in
+  /// order to ensure the proof is actually correct.
   ///
-  /// If this proof returns an error, the BatchVerifier MUST be assumed corrupted and discarded.
+  /// If this proof returns `Err(_)`, the BatchVerifier MUST be assumed corrupted and discarded.
   pub(crate) fn verify(
     self,
     verifier: &mut BatchVerifier<C>,
     transcript: &mut VerifierTranscript,
-  ) -> Result<(), IpError> {
+  ) -> Result<(), IpVerifyError> {
     if verifier.g_bold.len() < self.generators.len() {
       verifier.g_bold.resize(self.generators.len(), C::F::ZERO);
+    }
+    if verifier.h_bold.len() < self.generators.len() {
       verifier.h_bold.resize(self.generators.len(), C::F::ZERO);
-      verifier.h_sum.resize(self.generators.len(), C::F::ZERO);
     }
 
     let IpStatement { generators, h_bold_weights, u, P } = self;
@@ -307,20 +328,16 @@ where
     let mut R = Vec::with_capacity(lr_len);
     let mut xs: Vec<C::F> = Vec::with_capacity(lr_len);
     for _ in 0 .. lr_len {
-      L.push(transcript.read_point::<C>().map_err(|_| IpError::IncompleteProof)?);
-      R.push(transcript.read_point::<C>().map_err(|_| IpError::IncompleteProof)?);
-      xs.push(transcript.challenge::<C>());
+      L.push(transcript.read_point::<C>().map_err(|_| IpVerifyError::IncompleteProof)?);
+      R.push(transcript.read_point::<C>().map_err(|_| IpVerifyError::IncompleteProof)?);
+      let x = transcript.challenge::<C>();
+      assert!(!bool::from(x.is_zero()), "transcript challenge was 0");
+      xs.push(x);
     }
 
     // We calculate their inverse in batch
     let mut x_invs = xs.clone();
-    {
-      let mut scratch = vec![C::F::ZERO; x_invs.len()];
-      ciphersuite::group::ff::BatchInverter::invert_with_external_scratch(
-        &mut x_invs,
-        &mut scratch,
-      );
-    }
+    (&mut x_invs).batch_invert();
 
     // Now, with x and x_inv, we need to calculate g_bold', h_bold', P'
     //
@@ -334,7 +351,7 @@ where
     // For how that works, please see its own documentation
     let product_cache = {
       let mut challenges = Vec::with_capacity(lr_len);
-
+      verifier.additional.reserve(2 * lr_len);
       let x_iter = xs.into_iter().zip(x_invs);
       let lr_iter = L.into_iter().zip(R);
       for ((x, x_inv), (L, R)) in x_iter.zip(lr_iter) {
@@ -347,8 +364,8 @@ where
     };
 
     // And now for the `if n = 1` case
-    let a = transcript.read_scalar::<C>().map_err(|_| IpError::IncompleteProof)?;
-    let b = transcript.read_scalar::<C>().map_err(|_| IpError::IncompleteProof)?;
+    let a = transcript.read_scalar::<C>().map_err(|_| IpVerifyError::IncompleteProof)?;
+    let b = transcript.read_scalar::<C>().map_err(|_| IpVerifyError::IncompleteProof)?;
     let c = a * b;
 
     // The multiexp of these terms equate to the final permutation of P

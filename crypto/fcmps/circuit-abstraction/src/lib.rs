@@ -14,9 +14,11 @@ use ciphersuite::{
 };
 
 use generalized_bulletproofs::{
-  ScalarVector, PedersenCommitment, PedersenVectorCommitment, ProofGenerators,
+  PedersenCommitment, PedersenVectorCommitment, ProofGenerators,
   transcript::{Transcript as ProverTranscript, VerifierTranscript, Commitments},
-  arithmetic_circuit_proof::{AcError, ArithmeticCircuitStatement, ArithmeticCircuitWitness},
+  arithmetic_circuit_proof::{
+    AcStatementError, ArithmeticCircuitStatement, ArithmeticCircuitWitness,
+  },
 };
 pub use generalized_bulletproofs::arithmetic_circuit_proof::{Variable, LinComb};
 
@@ -182,31 +184,32 @@ where
 {
   /// Obtain the statement for this circuit.
   ///
-  /// If configured as the prover, the witness to use is also returned.
+  /// If configured as the prover, the witness to use is also returned if one was successfully
+  /// constructed.
   #[allow(clippy::type_complexity)]
   pub fn statement(
     self,
     generators: ProofGenerators<'_, C>,
     commitments: Commitments<C>,
-  ) -> Result<(ArithmeticCircuitStatement<'_, C>, Option<ArithmeticCircuitWitness<C>>), AcError> {
+  ) -> Result<
+    (ArithmeticCircuitStatement<'_, C>, Option<ArithmeticCircuitWitness<C>>),
+    AcStatementError,
+  > {
     let statement = ArithmeticCircuitStatement::new(generators, self.constraints, commitments)?;
 
-    let witness = self
-      .prover
-      .map(|mut prover| {
-        // We can't deconstruct the witness as it implements Drop (per ZeroizeOnDrop)
-        // Accordingly, we take the values within it and move forward with those
-        let mut aL = vec![];
-        core::mem::swap(&mut prover.aL, &mut aL);
-        let mut aR = vec![];
-        core::mem::swap(&mut prover.aR, &mut aR);
-        let mut C = vec![];
-        core::mem::swap(&mut prover.C, &mut C);
-        let mut V = vec![];
-        core::mem::swap(&mut prover.V, &mut V);
-        ArithmeticCircuitWitness::new(ScalarVector::from(aL), ScalarVector::from(aR), C, V)
-      })
-      .transpose()?;
+    let witness = self.prover.and_then(|mut prover| {
+      // We can't deconstruct the witness as it implements Drop (per ZeroizeOnDrop)
+      // Accordingly, we take the values within it and move forward with those
+      let mut aL = vec![];
+      core::mem::swap(&mut prover.aL, &mut aL);
+      let mut aR = vec![];
+      core::mem::swap(&mut prover.aR, &mut aR);
+      let mut C = vec![];
+      core::mem::swap(&mut prover.C, &mut C);
+      let mut V = vec![];
+      core::mem::swap(&mut prover.V, &mut V);
+      ArithmeticCircuitWitness::new(aL, aR, C, V)
+    });
 
     Ok((statement, witness))
   }

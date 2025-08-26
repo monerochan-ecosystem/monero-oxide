@@ -521,6 +521,7 @@ version = "0.1.0"
 dependencies = [
  "blake2",
  "ciphersuite",
+ "flexible-transcript",
  "multiexp",
  "rand_core",
  "std-shims",

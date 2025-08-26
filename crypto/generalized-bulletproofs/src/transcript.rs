@@ -38,7 +38,7 @@ where
 /// Commitments written to/read from a transcript.
 // We use a dedicated type for this to coerce the caller into transcripting the commitments as
 // expected.
-#[cfg_attr(test, derive(Clone, PartialEq, Debug))]
+#[derive(Clone, PartialEq, Debug)]
 pub struct Commitments<C: Ciphersuite> {
   pub(crate) C: PointVector<C>,
   pub(crate) V: PointVector<C>,
@@ -96,11 +96,15 @@ impl Transcript {
     C: Vec<C::G>,
     V: Vec<C::G>,
   ) -> Commitments<C> {
-    self.digest.update(u32::try_from(C.len()).unwrap().to_le_bytes());
+    const _NO_128_BIT_PLATFORMS: [(); (u64::BITS - usize::BITS) as usize] =
+      [(); (u64::BITS - usize::BITS) as usize];
+    const U64_FROM_USIZE_ERR: &str =
+      "usize::BITS < u64::BITS yet couldn't convert from usize to u64";
+    self.digest.update(u64::try_from(C.len()).expect(U64_FROM_USIZE_ERR).to_le_bytes());
     for C in &C {
       self.push_point(C);
     }
-    self.digest.update(u32::try_from(V.len()).unwrap().to_le_bytes());
+    self.digest.update(u64::try_from(V.len()).expect(U64_FROM_USIZE_ERR).to_le_bytes());
     for V in &V {
       self.push_point(V);
     }
@@ -174,18 +178,17 @@ impl<'a> VerifierTranscript<'a> {
   /// Read the Pedersen (vector) Commitments from the transcript.
   ///
   /// The lengths of the vectors are not transcripted.
-  #[allow(clippy::type_complexity)]
   pub fn read_commitments<C: Ciphersuite>(
     &mut self,
     C: usize,
     V: usize,
   ) -> io::Result<Commitments<C>> {
-    self.digest.update(u32::try_from(C).unwrap().to_le_bytes());
+    self.digest.update(u64::try_from(C).map_err(io::Error::other)?.to_le_bytes());
     let mut C_vec = Vec::with_capacity(C);
     for _ in 0 .. C {
       C_vec.push(self.read_point::<C>()?);
     }
-    self.digest.update(u32::try_from(V).unwrap().to_le_bytes());
+    self.digest.update(u64::try_from(V).map_err(io::Error::other)?.to_le_bytes());
     let mut V_vec = Vec::with_capacity(V);
     for _ in 0 .. V {
       V_vec.push(self.read_point::<C>()?);
