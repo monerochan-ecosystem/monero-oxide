@@ -34,3 +34,16 @@ fn test_vectors() {
     }
   }
 }
+
+#[test]
+fn single_and_multithreaded_generators() {
+  use helioselene::Helios;
+  use crate::{FCMP_HELIOS_GENERATORS, FcmpGenerators};
+
+  let single = FcmpGenerators::<Helios>::new_internal_singlethreaded(FCMP_HELIOS_GENERATORS);
+  let multi = FcmpGenerators::<Helios>::new_internal_multithreaded(FCMP_HELIOS_GENERATORS).unwrap();
+  assert_eq!(single.generators.g(), multi.generators.g());
+  assert_eq!(single.generators.h(), multi.generators.h());
+  assert_eq!(single.generators.g_bold_slice(), multi.generators.g_bold_slice());
+  assert_eq!(single.generators.h_bold_slice(), multi.generators.h_bold_slice());
+}

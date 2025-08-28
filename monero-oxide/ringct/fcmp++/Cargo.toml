@@ -47,7 +47,7 @@ modular-frost = { version = "0.10", default-features = false, features = ["ed255
 ec-divisors = { path = "../../../crypto/divisors", default-features = false, features = ["ed25519"] }
 helioselene = { path = "../../../crypto/helioselene", default-features = false }
 ciphersuite = { version = "0.4", default-features = false, features = ["ed25519"] }
-monero-generators = { path = "../../generators", default-features = false }
+monero-generators = { path = "../../generators", default-features = false, features = ["std"] }
 
 [dev-dependencies]
 rand_chacha = { version = "0.3", default-features = false }

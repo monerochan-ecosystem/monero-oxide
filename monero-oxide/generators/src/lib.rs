@@ -166,24 +166,110 @@ impl<C: ciphersuite::Ciphersuite> FcmpGenerators<C>
 where
   C::G: GroupEncoding<Repr = [u8; 32]>,
 {
-  fn new_internal(generators: usize) -> Self {
-    use std_shims::{alloc::format, string::String};
+  fn id() -> std_shims::string::String {
+    String::from_utf8(C::ID.to_vec()).expect("Helios/Selene din't have a UTF-8 ID")
+  }
 
-    let id = String::from_utf8(C::ID.to_vec()).expect("Helios/Selene din't have a UTF-8 ID");
-    let g = rejection_sampling_hash_to_curve::<C::G>(format!("Monero {id} G").as_bytes());
-    let h = rejection_sampling_hash_to_curve::<C::G>(format!("Monero {id} H").as_bytes());
+  fn g_h(id: &str) -> (C::G, C::G) {
+    (
+      rejection_sampling_hash_to_curve::<C::G>(format!("Monero {id} G").as_bytes()),
+      rejection_sampling_hash_to_curve::<C::G>(format!("Monero {id} H").as_bytes()),
+    )
+  }
+
+  fn new_generator_pair(id: &str, i: usize) -> (C::G, C::G) {
+    (
+      rejection_sampling_hash_to_curve::<C::G>(format!("Monero {id} G {i}").as_bytes()),
+      rejection_sampling_hash_to_curve::<C::G>(format!("Monero {id} H {i}").as_bytes()),
+    )
+  }
+
+  fn new_internal_singlethreaded(generators: usize) -> Self {
+    let id = Self::id();
+    let (g, h) = Self::g_h(&id);
     let mut g_bold = Vec::with_capacity(generators);
     let mut h_bold = Vec::with_capacity(generators);
     for i in 0 .. generators {
-      g_bold
-        .push(rejection_sampling_hash_to_curve::<C::G>(format!("Monero {id} G {i}").as_bytes()));
-      h_bold
-        .push(rejection_sampling_hash_to_curve::<C::G>(format!("Monero {id} H {i}").as_bytes()));
+      let (g_bold_i, h_bold_i) = Self::new_generator_pair(&id, i);
+      g_bold.push(g_bold_i);
+      h_bold.push(h_bold_i);
     }
     Self {
       generators: generalized_bulletproofs::Generators::new(g, h, g_bold, h_bold)
         .expect("uniformly sampled points couldn't instantiate generators"),
     }
+  }
+
+  #[cfg(feature = "std")]
+  fn new_internal_multithreaded(generators: usize) -> Option<Self> {
+    let id = Self::id();
+    let (g, h) = Self::g_h(&id);
+
+    use std::thread;
+    use group::Group;
+
+    let threads = {
+      let threads = thread::available_parallelism().ok()?;
+      // Don't use more threads than generators
+      let threads = usize::from(threads).min(generators);
+      // Only use an amount of threads which are a power of two
+      let next_power_of_two = threads.next_power_of_two();
+      // If `threads` was already a power of two, return it as-is
+      if threads == next_power_of_two {
+        threads
+      } else {
+        // Return the largest power of two less than threads
+        next_power_of_two / 2
+      }
+    };
+
+    // This will be a perfect division as `threads` is a smaller or equal power of two than
+    // `generators`
+    let generators_per_thread = generators / threads;
+    debug_assert_eq!(
+      generators.next_power_of_two(),
+      generators,
+      "generators wasn't a power of two"
+    );
+    assert_eq!(
+      generators_per_thread * threads,
+      generators,
+      "generating the wrong amount of generators"
+    );
+
+    let mut g_bold = vec![C::G::identity(); generators];
+    let mut h_bold = vec![C::G::identity(); generators];
+    thread::scope(|scope| {
+      let mut g_bold_slice: &mut [_] = g_bold.as_mut();
+      let mut h_bold_slice: &mut [_] = h_bold.as_mut();
+      for i in 0 .. threads {
+        let id = &id;
+        let i = i * generators_per_thread;
+        let local_g_bold_slice;
+        (local_g_bold_slice, g_bold_slice) = g_bold_slice.split_at_mut(generators_per_thread);
+        let local_h_bold_slice;
+        (local_h_bold_slice, h_bold_slice) = h_bold_slice.split_at_mut(generators_per_thread);
+        scope.spawn(move || {
+          for j in 0 .. generators_per_thread {
+            (local_g_bold_slice[j], local_h_bold_slice[j]) = Self::new_generator_pair(id, i + j);
+          }
+        });
+      }
+    });
+
+    Some(Self {
+      generators: generalized_bulletproofs::Generators::new(g, h, g_bold, h_bold)
+        .expect("uniformly sampled points couldn't instantiate generators"),
+    })
+  }
+
+  fn new_internal(generators: usize) -> Self {
+    #[cfg(feature = "std")]
+    let res = Self::new_internal_multithreaded(generators)
+      .unwrap_or_else(|| Self::new_internal_singlethreaded(generators));
+    #[cfg(not(feature = "std"))]
+    let res = Self::new_internal_singlethreaded(generators);
+    res
   }
 }
 
