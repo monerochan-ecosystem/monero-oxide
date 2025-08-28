@@ -4,7 +4,7 @@
 #![deny(missing_docs)]
 #![allow(non_snake_case)]
 
-use core::ops::Add;
+use core::{borrow::Borrow, ops::Add};
 #[allow(unused_imports)]
 use std_shims::prelude::*;
 use std_shims::{vec, vec::Vec};
@@ -46,7 +46,7 @@ pub trait DivisorCurve: Group + ConstantTimeEq + ConditionallySelectable + Zeroi
 
   /// Precomputed interpolator required for interpolating a divisor representing a scalar
   /// multiplication.
-  fn interpolator_for_scalar_mul() -> &'static Interpolator<Self::FieldElement>;
+  fn interpolator_for_scalar_mul() -> impl Borrow<Interpolator<Self::FieldElement>>;
 
   /// Convert a point to its affine coordinates.
   ///
@@ -549,7 +549,7 @@ impl<F: Zeroize + PrimeFieldBits> ScalarDecomposition<F> {
     }
 
     // Create a divisor out of the points
-    let res = new_divisor::<C>(&divisor_points, C::interpolator_for_scalar_mul()).unwrap();
+    let res = new_divisor::<C>(&divisor_points, C::interpolator_for_scalar_mul().borrow()).unwrap();
     divisor_points.zeroize();
     res
   }
@@ -557,6 +557,7 @@ impl<F: Zeroize + PrimeFieldBits> ScalarDecomposition<F> {
 
 #[cfg(any(test, feature = "ed25519"))]
 mod ed25519 {
+  use core::borrow::Borrow;
   use std_shims::sync::LazyLock;
 
   use subtle::{Choice, ConditionallySelectable};
@@ -588,10 +589,10 @@ mod ed25519 {
       ))
     }
 
-    fn interpolator_for_scalar_mul() -> &'static Interpolator<Self::FieldElement> {
+    fn interpolator_for_scalar_mul() -> impl Borrow<Interpolator<Self::FieldElement>> {
       static PRECOMPUTE: LazyLock<Interpolator<FieldElement>> =
         LazyLock::new(|| Interpolator::new(128));
-      &PRECOMPUTE
+      &*PRECOMPUTE
     }
 
     // https://www.ietf.org/archive/id/draft-ietf-lwig-curve-representations-02.pdf E.2

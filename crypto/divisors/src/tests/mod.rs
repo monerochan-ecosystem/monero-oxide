@@ -1,3 +1,5 @@
+use core::borrow::Borrow;
+
 use rand_core::OsRng;
 
 use group::{
@@ -59,7 +61,7 @@ fn check_divisor<C: DivisorCurve>(points: Vec<C>) {
   let points_xy = points_xy(&points);
 
   // Create the divisor
-  let divisor = new_divisor::<C>(&points_xy, precomputation).unwrap();
+  let divisor = new_divisor::<C>(&points_xy, precomputation.borrow()).unwrap();
   let eval = |c| {
     let (x, y) = C::to_xy(c).unwrap();
     divisor.eval(x, y)
@@ -97,7 +99,7 @@ fn test_divisor<C: DivisorCurve>() {
 
     let points_xy = points_xy(&points);
     // Create the divisor
-    let divisor = new_divisor::<C>(&points_xy, precomputation).unwrap();
+    let divisor = new_divisor::<C>(&points_xy, precomputation.borrow()).unwrap();
 
     // For a divisor interpolating 256 points, as one does when interpreting a 255-bit discrete log
     // with the result of its scalar multiplication against a fixed generator, the lengths of the
