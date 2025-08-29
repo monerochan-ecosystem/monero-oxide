@@ -2,13 +2,7 @@
 #![doc = include_str!("../README.md")]
 #![no_std]
 
-// Use black_box when possible
-#[rustversion::since(1.66)]
 use core::hint::black_box;
-#[rustversion::before(1.66)]
-fn black_box<T>(val: T) -> T {
-  val
-}
 
 use zeroize::Zeroize;
 

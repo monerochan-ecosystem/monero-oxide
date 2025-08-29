@@ -1,3 +1,4 @@
+#[cfg(feature = "alloc")]
 #[allow(unused_imports)]
 use std_shims::prelude::*;
 #[cfg(feature = "alloc")]

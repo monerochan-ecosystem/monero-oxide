@@ -1,3 +1,7 @@
 #![no_std]
 
-pub use monero_wallet;
+#[cfg(feature = "alloc")]
+pub mod alloc {
+  pub use helioselene;
+  pub use monero_wallet;
+}

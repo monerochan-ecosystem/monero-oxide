@@ -268,9 +268,9 @@ dependencies = [
 
 [[package]]
 name = "dalek-ff-group"
-version = "0.4.4"
+version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb3665951647a80a4ce58562c8bfc5df9d2a2d4f0021b72a0c0ddf408737feeb"
+checksum = "231684731518402967286b76bedadedfd6b0867f814e2cd41d4a82bedea2902a"
 dependencies = [
  "crypto-bigint",
  "curve25519-dalek",
@@ -626,7 +626,6 @@ dependencies = [
  "group",
  "hex",
  "rand_core",
- "rustversion",
  "std-shims",
  "subtle",
  "zeroize",
@@ -1052,6 +1051,7 @@ dependencies = [
 name = "monero-oxide-no-std-tests"
 version = "0.1.0"
 dependencies = [
+ "helioselene",
  "monero-wallet",
 ]
 

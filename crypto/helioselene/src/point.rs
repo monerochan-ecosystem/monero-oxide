@@ -411,6 +411,7 @@ macro_rules! curve {
       }
     }
 
+    #[cfg(feature = "alloc")]
     impl ec_divisors::DivisorCurve for $Point {
       type FieldElement = $Field;
       type XyPoint = ec_divisors::Projective<Self>;

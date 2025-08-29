@@ -17,9 +17,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 workspace = true
 
 [dependencies]
-std-shims = { version = "0.1.4", default-features = false }
-
-rustversion = "1"
+std-shims = { version = "0.1.4", default-features = false, optional = true }
 
 rand_core = { version = "0.6", default-features = false }
 
@@ -34,7 +32,7 @@ crypto-bigint = { version = "0.5", default-features = false, features = ["zeroiz
 
 dalek-ff-group = { version = "0.4.2", default-features = false }
 
-ec-divisors = { path = "../divisors", default-features = false }
+ec-divisors = { path = "../divisors", default-features = false, optional = true }
 ciphersuite = { version = "0.4.2", default-features = false }
 
 [dev-dependencies]
@@ -51,7 +49,7 @@ name = "helioselene"
 harness = false
 
 [features]
-alloc = ["ciphersuite/alloc"]
+alloc = ["std-shims", "ciphersuite/alloc", "ec-divisors"]
 std = [
   "alloc",
 
