@@ -1,5 +1,10 @@
-use core::fmt;
+use core::{
+  fmt,
+  ops::{Add, Sub, Div},
+};
 use std_shims::{vec, vec::Vec};
+
+use generic_array::typenum::{Sum, Diff, Quot, U1, U2};
 
 use ciphersuite::{
   group::ff::{Field, PrimeField, BatchInverter, FromUniformBytes},
@@ -11,24 +16,52 @@ use generalized_bulletproofs_circuit_abstraction::*;
 use crate::*;
 
 /// Parameters for a discrete logarithm proof.
-pub trait DiscreteLogParameters {
+pub trait DiscreteLogParameter {
   /// The amount of bits used to represent a scalar.
   type ScalarBits: ArrayLength;
+}
 
-  /// The amount of x**i coefficients in a divisor.
+/// Derived parameters for a discrete logarithm proof.
+///
+/// This should not be directly implemented. `DiscreteLogParameter` should be implemented for which
+/// this will then be automatically derived.
+pub trait DiscreteLogParameters: DiscreteLogParameter {
+  /// The amount of `x**i` coefficients in a divisor.
   ///
   /// This is the amount of points in a divisor (the amount of bits in a scalar, plus one) divided
   /// by two.
   type XCoefficients: ArrayLength;
 
-  /// The amount of x**i coefficients in a divisor, minus one.
+  /// The amount of `x**i` coefficients in a divisor, minus one.
   type XCoefficientsMinusOne: ArrayLength;
 
-  /// The amount of y x**i coefficients in a divisor.
+  /// The amount of `y x**i` coefficients in a divisor.
   ///
-  /// This is the amount of points in a divisor (the amount of bits in a scalar, plus one) divided
-  /// by two, minus two.
+  /// This is the amount of points in a divisor (the amount of bits in a scalar, plus one),
+  /// ceiling division by two, minus two.
   type YxCoefficients: ArrayLength;
+}
+
+type XCoefficients<ScalarBits> = <<ScalarBits as Add<U1>>::Output as Div<U2>>::Output;
+
+impl<P: DiscreteLogParameter> DiscreteLogParameters for P
+where
+  // XCoefficients
+  P::ScalarBits: Add<U1>,
+  <P::ScalarBits as Add<U1>>::Output: Add<U1> + Div<U2>,
+  <<P::ScalarBits as Add<U1>>::Output as Div<U2>>::Output: ArrayLength + Sub<U1>,
+  // XCoefficientsMinusOne
+  XCoefficients<Self::ScalarBits>: Sub<U1>,
+  <XCoefficients<Self::ScalarBits> as Sub<U1>>::Output: ArrayLength,
+  // YxCoefficients
+  <<P::ScalarBits as Add<U1>>::Output as Add<U1>>::Output: Div<U2>,
+  <<<P::ScalarBits as Add<U1>>::Output as Add<U1>>::Output as Div<U2>>::Output: Sub<U2>,
+  <<<<P::ScalarBits as Add<U1>>::Output as Add<U1>>::Output as Div<U2>>::Output as Sub<U2>>::Output:
+    ArrayLength,
+{
+  type XCoefficients = XCoefficients<Self::ScalarBits>;
+  type XCoefficientsMinusOne = Diff<XCoefficients<Self::ScalarBits>, U1>;
+  type YxCoefficients = Diff<Quot<Sum<Sum<Self::ScalarBits, U1>, U1>, U2>, U2>;
 }
 
 /// A tabled generator for proving/verifying discrete logarithm claims.

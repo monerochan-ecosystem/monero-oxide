@@ -1,6 +1,6 @@
 use rand_core::OsRng;
 
-use generic_array::typenum::{Sum, Diff, Quot, U, U1, U2};
+use generic_array::typenum::U;
 
 use multiexp::multiexp_vartime;
 use ciphersuite::{group::Group, Ciphersuite, Ed25519};
@@ -10,27 +10,18 @@ use ec_divisors::ScalarDecomposition;
 use crate::{*, tree::hash_grow};
 
 struct Ed25519Params;
-impl DiscreteLogParameters for Ed25519Params {
+impl DiscreteLogParameter for Ed25519Params {
   type ScalarBits = U<{ <<Ed25519 as Ciphersuite>::F as PrimeField>::NUM_BITS as usize }>;
-  type XCoefficients = Quot<Sum<Self::ScalarBits, U1>, U2>;
-  type XCoefficientsMinusOne = Diff<Self::XCoefficients, U1>;
-  type YxCoefficients = Diff<Quot<Sum<Self::ScalarBits, U1>, U2>, U2>;
 }
 
 struct SeleneParams;
-impl DiscreteLogParameters for SeleneParams {
+impl DiscreteLogParameter for SeleneParams {
   type ScalarBits = U<{ <<Selene as Ciphersuite>::F as PrimeField>::NUM_BITS as usize }>;
-  type XCoefficients = Quot<Sum<Self::ScalarBits, U1>, U2>;
-  type XCoefficientsMinusOne = Diff<Self::XCoefficients, U1>;
-  type YxCoefficients = Diff<Quot<Sum<Self::ScalarBits, U1>, U2>, U2>;
 }
 
 struct HeliosParams;
-impl DiscreteLogParameters for HeliosParams {
+impl DiscreteLogParameter for HeliosParams {
   type ScalarBits = U<{ <<Helios as Ciphersuite>::F as PrimeField>::NUM_BITS as usize }>;
-  type XCoefficients = Quot<Sum<Self::ScalarBits, U1>, U2>;
-  type XCoefficientsMinusOne = Diff<Self::XCoefficients, U1>;
-  type YxCoefficients = Diff<Quot<Sum<Self::ScalarBits, U1>, U2>, U2>;
 }
 
 #[derive(Clone)]

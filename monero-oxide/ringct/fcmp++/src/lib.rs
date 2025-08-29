@@ -9,7 +9,7 @@ use std_shims::{sync::LazyLock, vec, vec::Vec, io};
 use rand_core::{RngCore, CryptoRng};
 use zeroize::Zeroize;
 
-use generic_array::typenum::{Sum, Diff, Quot, U, U1, U2};
+use generic_array::typenum::U;
 
 use blake2::{Digest, Blake2b512};
 
@@ -36,31 +36,22 @@ mod tests;
 /// The discrete-log gadget parameters for Ed25519.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Ed25519Params;
-impl DiscreteLogParameters for Ed25519Params {
+impl DiscreteLogParameter for Ed25519Params {
   type ScalarBits = U<{ <<Ed25519 as Ciphersuite>::F as PrimeField>::NUM_BITS as usize }>;
-  type XCoefficients = Quot<Sum<Self::ScalarBits, U1>, U2>;
-  type XCoefficientsMinusOne = Diff<Self::XCoefficients, U1>;
-  type YxCoefficients = Diff<Quot<Sum<Self::ScalarBits, U1>, U2>, U2>;
 }
 
 /// The discrete-log gadget parameters for Selene.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct SeleneParams;
-impl DiscreteLogParameters for SeleneParams {
+impl DiscreteLogParameter for SeleneParams {
   type ScalarBits = U<{ <<Selene as Ciphersuite>::F as PrimeField>::NUM_BITS as usize }>;
-  type XCoefficients = Quot<Sum<Self::ScalarBits, U1>, U2>;
-  type XCoefficientsMinusOne = Diff<Self::XCoefficients, U1>;
-  type YxCoefficients = Diff<Quot<Sum<Self::ScalarBits, U1>, U2>, U2>;
 }
 
 /// The discrete-log gadget parameters for Helios.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct HeliosParams;
-impl DiscreteLogParameters for HeliosParams {
+impl DiscreteLogParameter for HeliosParams {
   type ScalarBits = U<{ <<Helios as Ciphersuite>::F as PrimeField>::NUM_BITS as usize }>;
-  type XCoefficients = Quot<Sum<Self::ScalarBits, U1>, U2>;
-  type XCoefficientsMinusOne = Diff<Self::XCoefficients, U1>;
-  type YxCoefficients = Diff<Quot<Sum<Self::ScalarBits, U1>, U2>, U2>;
 }
 
 /// The curves to use with the FCMP.
