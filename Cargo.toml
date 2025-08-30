@@ -52,11 +52,15 @@ generalized-bulletproofs-circuit-abstraction = { opt-level = 3 }
 generalized-bulletproofs-ec-gadgets = { opt-level = 3 }
 full-chain-membership-proofs = { opt-level = 3 }
 
+monero-io = { opt-level = 3 }
+monero-generators = { opt-level = 3 }
+monero-primitives = { opt-level = 3 }
 monero-borromean = { opt-level = 3 }
 monero-bulletproofs = { opt-level = 3 }
 monero-mlsag = { opt-level = 3 }
 monero-clsag = { opt-level = 3 }
 monero-fcmp-plus-plus = { opt-level = 3 }
+monero-oxide = { opt-level = 3 }
 
 [profile.release]
 panic = "unwind"
