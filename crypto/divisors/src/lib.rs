@@ -44,9 +44,12 @@ pub trait DivisorCurve: Group + ConstantTimeEq + ConditionallySelectable + Zeroi
   /// The B in the curve equation `y^2 = x^3 + A x + B`.
   fn b() -> Self::FieldElement;
 
+  /// The type representing an interpolator which has been borrowed.
+  // TODO: Remove with Rust 1.75
+  type BorrowedInterpolator: Borrow<Interpolator<Self::FieldElement>>;
   /// Precomputed interpolator required for interpolating a divisor representing a scalar
   /// multiplication.
-  fn interpolator_for_scalar_mul() -> impl Borrow<Interpolator<Self::FieldElement>>;
+  fn interpolator_for_scalar_mul() -> Self::BorrowedInterpolator;
 
   /// Convert a point to its affine coordinates.
   ///
@@ -557,7 +560,6 @@ impl<F: Zeroize + PrimeFieldBits> ScalarDecomposition<F> {
 
 #[cfg(any(test, feature = "ed25519"))]
 mod ed25519 {
-  use core::borrow::Borrow;
   use std_shims::sync::LazyLock;
 
   use subtle::{Choice, ConditionallySelectable};
@@ -589,7 +591,8 @@ mod ed25519 {
       ))
     }
 
-    fn interpolator_for_scalar_mul() -> impl Borrow<Interpolator<Self::FieldElement>> {
+    type BorrowedInterpolator = &'static Interpolator<Self::FieldElement>;
+    fn interpolator_for_scalar_mul() -> Self::BorrowedInterpolator {
       static PRECOMPUTE: LazyLock<Interpolator<FieldElement>> =
         LazyLock::new(|| Interpolator::new(128));
       &*PRECOMPUTE

@@ -1,5 +1,4 @@
 use core::{
-  borrow::Borrow,
   ops::{DerefMut, Add, AddAssign, Neg, Sub, SubAssign, Mul, MulAssign},
   iter::Sum,
 };
@@ -416,8 +415,8 @@ macro_rules! curve {
       type FieldElement = $Field;
       type XyPoint = ec_divisors::Projective<Self>;
 
-      fn interpolator_for_scalar_mul() -> impl Borrow<ec_divisors::Interpolator<Self::FieldElement>>
-      {
+      type BorrowedInterpolator = &'static ec_divisors::Interpolator<Self::FieldElement>;
+      fn interpolator_for_scalar_mul() -> Self::BorrowedInterpolator {
         static PRECOMPUTE: std_shims::sync::LazyLock<ec_divisors::Interpolator<$Field>> =
           std_shims::sync::LazyLock::new(|| {
             ec_divisors::Interpolator::new(usize::try_from(130).unwrap())
