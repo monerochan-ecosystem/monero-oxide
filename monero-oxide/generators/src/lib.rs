@@ -3,7 +3,9 @@
 #![deny(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use std_shims::{sync::LazyLock, vec::Vec};
+#[allow(unused_imports)]
+use std_shims::prelude::*;
+use std_shims::{sync::LazyLock, vec::Vec, string::String, alloc::format};
 
 use sha3::{Digest, Keccak256};
 
@@ -166,7 +168,7 @@ impl<C: ciphersuite::Ciphersuite> FcmpGenerators<C>
 where
   C::G: GroupEncoding<Repr = [u8; 32]>,
 {
-  fn id() -> std_shims::string::String {
+  fn id() -> String {
     String::from_utf8(C::ID.to_vec()).expect("Helios/Selene din't have a UTF-8 ID")
   }
 
