@@ -930,8 +930,8 @@ where
       };
       match (claimed_root, tree) {
         (TreeRoot::C1(claimed), TreeRoot::C1(actual)) => {
-          let R = <C::C1 as Ciphersuite>::read_G(&mut self.root_blind_pok[.. 32].as_ref())?;
-          let s = <C::C1 as Ciphersuite>::read_F(&mut self.root_blind_pok[32 ..].as_ref())?;
+          let R = <C::C1 as Ciphersuite>::read_G(&mut &self.root_blind_pok[.. 32])?;
+          let s = <C::C1 as Ciphersuite>::read_F(&mut &self.root_blind_pok[32 ..])?;
 
           let c = transcript.challenge::<C::C1>();
 
@@ -943,8 +943,8 @@ where
           verifier_1.h -= s * batch_verifier_weight;
         }
         (TreeRoot::C2(claimed), TreeRoot::C2(actual)) => {
-          let R = <C::C2 as Ciphersuite>::read_G(&mut self.root_blind_pok[.. 32].as_ref())?;
-          let s = <C::C2 as Ciphersuite>::read_F(&mut self.root_blind_pok[32 ..].as_ref())?;
+          let R = <C::C2 as Ciphersuite>::read_G(&mut &self.root_blind_pok[.. 32])?;
+          let s = <C::C2 as Ciphersuite>::read_F(&mut &self.root_blind_pok[32 ..])?;
 
           let c = transcript.challenge::<C::C2>();
 

@@ -63,8 +63,8 @@ impl SalLegacyAddendum {
 
 impl WriteAddendum for SalLegacyAddendum {
   fn write<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
-    writer.write_all(self.key_image_share.compress().to_bytes().as_ref())?;
-    writer.write_all(self.x_U_share.compress().to_bytes().as_ref())
+    writer.write_all(&self.key_image_share.compress().to_bytes())?;
+    writer.write_all(&self.x_U_share.compress().to_bytes())
   }
 }
 

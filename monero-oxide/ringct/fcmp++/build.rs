@@ -25,9 +25,9 @@ impl NewGenerators for helioselene::Selene {
 #[cfg(feature = "compile-time-generators")]
 fn generator_set<C: NewGenerators>()
 where
-  C::G: ciphersuite::group::GroupEncoding<Repr = [u8; 32]> + ec_divisors::DivisorCurve,
+  C::G: ec_divisors::DivisorCurve,
 {
-  use ciphersuite::group::{ff::PrimeField, GroupEncoding};
+  use ciphersuite::group::ff::PrimeField;
   use ec_divisors::DivisorCurve;
 
   fn read_point(point: &str, x_str: &str, y_str: &str) -> String {
@@ -49,10 +49,7 @@ where
     )
   }
 
-  fn serialize<G: GroupEncoding<Repr = [u8; 32]> + DivisorCurve>(
-    point: &str,
-    generator: G,
-  ) -> String {
+  fn serialize<G: DivisorCurve>(point: &str, generator: G) -> String {
     let (x, y) = G::to_xy(generator).expect("generator was the identity?");
     read_point(
       point,
