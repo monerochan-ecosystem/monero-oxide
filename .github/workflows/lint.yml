@@ -142,6 +142,9 @@ jobs:
             # Remove the trailing comma by replacing the last line's "," with ""
             members=$(echo "$members" | sed "$(($(echo "$members" | wc -l) - 1))s/\,//")
 
+            # Don't bother testing the no-std tests
+            members=$(echo members | grep -v "\"tests/no-std\"")
+
             echo $members | jq -r ".[]" | while read -r member; do
               check_msrv $member
               correct=$?
