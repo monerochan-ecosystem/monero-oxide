@@ -27,13 +27,13 @@ ff = { version = "0.13", default-features = false, features = ["alloc", "bits"] 
 group = { version = "0.13", default-features = false }
 
 crypto-bigint = { version = "0.5", default-features = false, features = ["zeroize"], optional = true }
-dalek-ff-group = { version = "0.4", default-features = false, optional = true }
+dalek-ff-group = { version = "0.5", default-features = false, optional = true }
 
 [dev-dependencies]
 rand_core = { version = "0.6", features = ["getrandom"] }
 
 crypto-bigint = { version = "0.5", default-features = false, features = ["zeroize"] }
-dalek-ff-group = { version = "0.4", default-features = false }
+dalek-ff-group = { version = "0.5", default-features = false }
 
 [features]
 std = ["std-shims/std", "zeroize/std", "subtle/std", "ff/std", "dalek-ff-group?/std"]

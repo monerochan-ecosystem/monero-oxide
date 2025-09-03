@@ -8,13 +8,13 @@ use zeroize::{Zeroize, Zeroizing};
 
 use transcript::{Transcript, RecommendedTranscript};
 
-use dalek_ff_group::{Scalar, EdwardsPoint};
+use dalek_ff_group::{Scalar, EdwardsPoint, Ed25519};
 use ciphersuite::{
   group::{
     ff::{Field, PrimeField},
     Group, GroupEncoding,
   },
-  Ciphersuite, Ed25519,
+  Ciphersuite,
 };
 
 use modular_frost::{
@@ -365,12 +365,8 @@ impl<R: Send + Sync + Clone + RngCore + CryptoRng, T: Sync + Clone + Debug + Tra
     weight_transcript.append_message(b"rI", nonces[0][2].to_bytes());
     weight_transcript.append_message(b"e", e.to_repr());
     weight_transcript.append_message(b"s", share.to_repr());
-    let weight_u = Scalar(curve25519_dalek::Scalar::from_bytes_mod_order_wide(
-      &weight_transcript.challenge(b"U").into(),
-    ));
-    let weight_i = Scalar(curve25519_dalek::Scalar::from_bytes_mod_order_wide(
-      &weight_transcript.challenge(b"I").into(),
-    ));
+    let weight_u = Scalar::from_bytes_mod_order_wide(&weight_transcript.challenge(b"U").into());
+    let weight_i = Scalar::from_bytes_mod_order_wide(&weight_transcript.challenge(b"I").into());
 
     Ok(vec![
       // G

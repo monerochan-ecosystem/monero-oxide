@@ -8,7 +8,7 @@ use curve25519_dalek::{constants::ED25519_BASEPOINT_TABLE, scalar::Scalar};
 #[cfg(feature = "multisig")]
 use transcript::{Transcript, RecommendedTranscript};
 #[cfg(feature = "multisig")]
-use frost::curve::Ed25519;
+use dalek_ff_group::Ed25519;
 
 use monero_generators::biased_hash_to_point;
 use monero_primitives::{Commitment, Decoys};

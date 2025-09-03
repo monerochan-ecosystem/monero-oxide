@@ -3,7 +3,7 @@ use rand_core::OsRng;
 use transcript::{Transcript, RecommendedTranscript};
 
 use multiexp::BatchVerifier;
-use ciphersuite::group::{ff::Field, Group};
+use ciphersuite::group::Group;
 use dalek_ff_group::{Scalar, EdwardsPoint};
 
 use modular_frost::{

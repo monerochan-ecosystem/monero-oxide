@@ -1,7 +1,7 @@
 use rand_core::OsRng;
 
 use multiexp::BatchVerifier;
-use ciphersuite::group::{ff::Field, Group};
+use ciphersuite::group::Group;
 use dalek_ff_group::{Scalar, EdwardsPoint};
 
 use monero_generators::T;

@@ -3,10 +3,10 @@ mod sal;
 use rand_core::OsRng;
 
 use multiexp::multiexp_vartime;
-use dalek_ff_group::{Scalar, EdwardsPoint};
+use dalek_ff_group::{Scalar, EdwardsPoint, Ed25519};
 use ciphersuite::{
-  group::{ff::Field, Group, GroupEncoding},
-  Ciphersuite, Ed25519,
+  group::{Group, GroupEncoding},
+  Ciphersuite,
 };
 use helioselene::{Selene, Helios};
 use ec_divisors::{DivisorCurve, ScalarDecomposition};

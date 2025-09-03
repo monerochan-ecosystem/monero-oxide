@@ -1,7 +1,5 @@
 use rand_core::OsRng;
 
-use group::ff::Field;
-
 use crate::Poly;
 
 type F = dalek_ff_group::Scalar;

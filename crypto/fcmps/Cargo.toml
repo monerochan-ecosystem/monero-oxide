@@ -38,9 +38,9 @@ generalized-bulletproofs-ec-gadgets = { path = "./ec-gadgets", default-features 
 [dev-dependencies]
 rand_core = { version = "0.6", features = ["getrandom"] }
 
-ciphersuite = { version = "0.4", features = ["ed25519"] }
+ciphersuite = { version = "0.4" }
 
-dalek-ff-group = "0.4.2"
+dalek-ff-group = "0.5"
 helioselene = { path = "../helioselene" }
 
 ec-divisors = { path = "../divisors", features = ["ed25519"] }

@@ -166,7 +166,7 @@ version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2ae44ce6224d75ced726e5597265b8f334b9bf4767b8b42e058f2304005d8475"
 dependencies = [
- "dalek-ff-group",
+ "dalek-ff-group 0.4.6",
  "digest",
  "elliptic-curve",
  "ff",
@@ -247,6 +247,7 @@ dependencies = [
  "cpufeatures",
  "curve25519-dalek-derive",
  "digest",
+ "ff",
  "fiat-crypto",
  "group",
  "rand_core",
@@ -272,6 +273,25 @@ version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "231684731518402967286b76bedadedfd6b0867f814e2cd41d4a82bedea2902a"
 dependencies = [
+ "crypto-bigint",
+ "curve25519-dalek",
+ "digest",
+ "ff",
+ "group",
+ "rand_core",
+ "rustversion",
+ "sha2",
+ "subtle",
+ "zeroize",
+]
+
+[[package]]
+name = "dalek-ff-group"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26103554e8f7857b6015a4a9ef551c6ce0669f6caa040785d4394bf52041ccaf"
+dependencies = [
+ "ciphersuite",
  "crypto-bigint",
  "curve25519-dalek",
  "digest",
@@ -361,7 +381,7 @@ name = "ec-divisors"
 version = "0.1.0"
 dependencies = [
  "crypto-bigint",
- "dalek-ff-group",
+ "dalek-ff-group 0.5.0",
  "ff",
  "group",
  "rand_core",
@@ -463,7 +483,7 @@ version = "0.1.0"
 dependencies = [
  "blake2",
  "ciphersuite",
- "dalek-ff-group",
+ "dalek-ff-group 0.5.0",
  "ec-divisors",
  "generalized-bulletproofs",
  "generalized-bulletproofs-circuit-abstraction",
@@ -619,7 +639,7 @@ dependencies = [
  "blake2",
  "ciphersuite",
  "crypto-bigint",
- "dalek-ff-group",
+ "dalek-ff-group 0.5.0",
  "ec-divisors",
  "ff",
  "ff-group-tests",
@@ -868,12 +888,12 @@ dependencies = [
 
 [[package]]
 name = "modular-frost"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ec2ce627391a5db2d7a253a37be37d23dcb786fa763ea516f496032e442492d"
+checksum = "373d09390d150d030cc06163dc83eae2af031e8048ceb08d74ac0eb187da1f4a"
 dependencies = [
  "ciphersuite",
- "dalek-ff-group",
+ "dalek-ff-group 0.5.0",
  "digest",
  "dkg",
  "dkg-dealer",
@@ -946,7 +966,7 @@ name = "monero-clsag"
 version = "0.1.0"
 dependencies = [
  "curve25519-dalek",
- "dalek-ff-group",
+ "dalek-ff-group 0.5.0",
  "flexible-transcript",
  "group",
  "modular-frost",
@@ -968,7 +988,7 @@ dependencies = [
  "blake2",
  "ciphersuite",
  "curve25519-dalek",
- "dalek-ff-group",
+ "dalek-ff-group 0.5.0",
  "ec-divisors",
  "flexible-transcript",
  "full-chain-membership-proofs",
@@ -993,7 +1013,7 @@ dependencies = [
  "ciphersuite",
  "crypto-bigint",
  "curve25519-dalek",
- "dalek-ff-group",
+ "dalek-ff-group 0.5.0",
  "full-chain-membership-proofs",
  "generalized-bulletproofs",
  "group",
@@ -1116,7 +1136,7 @@ name = "monero-wallet"
 version = "0.1.0"
 dependencies = [
  "curve25519-dalek",
- "dalek-ff-group",
+ "dalek-ff-group 0.5.0",
  "flexible-transcript",
  "hex",
  "modular-frost",

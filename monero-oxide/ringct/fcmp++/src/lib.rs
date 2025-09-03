@@ -13,10 +13,10 @@ use generic_array::typenum::U;
 
 use blake2::{Digest, Blake2b512};
 
-use dalek_ff_group::EdwardsPoint;
+use dalek_ff_group::{EdwardsPoint, Ed25519};
 use ciphersuite::{
   group::{ff::PrimeField, GroupEncoding},
-  Ciphersuite, Ed25519,
+  Ciphersuite,
 };
 use helioselene::{Selene, Helios};
 

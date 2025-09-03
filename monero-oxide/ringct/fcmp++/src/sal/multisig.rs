@@ -8,13 +8,13 @@ use zeroize::{Zeroize, Zeroizing};
 
 use transcript::Transcript;
 
-use dalek_ff_group::{Scalar, EdwardsPoint};
+use dalek_ff_group::{Scalar, EdwardsPoint, Ed25519};
 use ciphersuite::{
   group::{
     ff::{Field, PrimeField},
     Group, GroupEncoding,
   },
-  Ciphersuite, Ed25519,
+  Ciphersuite,
 };
 
 use modular_frost::{

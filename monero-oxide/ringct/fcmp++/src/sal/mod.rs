@@ -5,14 +5,13 @@ use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 use blake2::{Digest, Blake2b512};
 
-use curve25519_dalek::Scalar as DalekScalar;
-use dalek_ff_group::{Scalar, EdwardsPoint};
+use dalek_ff_group::{Scalar, EdwardsPoint, Ed25519};
 use ciphersuite::{
   group::{
     ff::{Field, PrimeField},
     Group, GroupEncoding,
   },
-  Ciphersuite, Ed25519,
+  Ciphersuite,
 };
 
 use monero_generators::{T, FCMP_PLUS_PLUS_U, FCMP_PLUS_PLUS_V};
@@ -195,7 +194,7 @@ impl SpendAuthAndLinkability {
     transcript.update(R_P.to_bytes());
     transcript.update(R_L.to_bytes());
 
-    Scalar(DalekScalar::from_hash(transcript.clone()))
+    Scalar::from_hash(transcript.clone())
   }
 
   /// Prove a Spend-Authorization and Linkability proof.
