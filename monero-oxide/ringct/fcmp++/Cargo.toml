@@ -27,7 +27,6 @@ generic-array = { version = "1", default-features = false, features = ["alloc"] 
 blake2 = { version = "0.10", default-features = false }
 
 multiexp = { version = "0.4", default-features = false }
-curve25519-dalek = { version = "4", default-features = false, features = ["alloc", "zeroize"] }
 dalek-ff-group = { version = "0.5", default-features = false }
 helioselene = { path = "../../../crypto/helioselene", default-features = false }
 ciphersuite = { version = "0.4", default-features = false }
@@ -78,6 +77,6 @@ std = [
   "rand_chacha?/std",
   "transcript?/std",
 ]
-compile-time-generators = ["curve25519-dalek/precomputed-tables"]
+compile-time-generators = []
 multisig = ["std", "transcript", "modular-frost"]
 default = ["std", "compile-time-generators"]

@@ -987,7 +987,6 @@ version = "0.1.0"
 dependencies = [
  "blake2",
  "ciphersuite",
- "curve25519-dalek",
  "dalek-ff-group 0.5.0",
  "ec-divisors",
  "flexible-transcript",
@@ -1136,7 +1135,6 @@ name = "monero-wallet"
 version = "0.1.0"
 dependencies = [
  "curve25519-dalek",
- "dalek-ff-group 0.5.0",
  "flexible-transcript",
  "hex",
  "modular-frost",
