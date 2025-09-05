@@ -699,6 +699,10 @@ impl Field for HelioseleneField {
 
     // We don't handle the final bit window as it's zero
 
+    // Normalize to the even choice of square root
+    // `let ()` is used to assert how `conditional_negate` operates in-place
+    let () = res.conditional_negate(res.is_odd());
+
     CtOption::new(res, res.square().ct_eq(self))
   }
 
