@@ -143,7 +143,7 @@ jobs:
             members=$(echo "$members" | grep -v -E "^([[:space:]])*$")
 
             # Don't bother testing the no-std tests
-            members=$(echo "$members" | grep -v "\"tests/no-std\"")w
+            members=$(echo "$members" | grep -v "\"tests/no-std\"")
 
             # Prune `members = [` to `[` by replacing the first line with just `[`
             members=$(echo "$members" | sed "1s/.*/\[/")
