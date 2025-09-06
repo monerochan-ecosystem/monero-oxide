@@ -136,14 +136,19 @@ jobs:
           function check_workspace {
             # Get the members array from the workspace's `Cargo.toml`
             cargo_toml_lines=$(cat ./Cargo.toml | wc -l)
+            # Keep all lines after the start of the array, then keep all lines before the next "]"
             members=$(cat Cargo.toml | grep "members\ \=\ \[" -m1 -A$cargo_toml_lines | grep "]" -m1 -B$cargo_toml_lines)
+
+            # Remove blank lines
+            members=$(echo "$members" | grep -v -E "^([[:space:]])*$")
+
+            # Don't bother testing the no-std tests
+            members=$(echo "$members" | grep -v "\"tests/no-std\"")w
+
             # Prune `members = [` to `[` by replacing the first line with just `[`
             members=$(echo "$members" | sed "1s/.*/\[/")
             # Remove the trailing comma by replacing the last line's "," with ""
             members=$(echo "$members" | sed "$(($(echo "$members" | wc -l) - 1))s/\,//")
-
-            # Don't bother testing the no-std tests
-            members=$(echo "$members" | grep -v "\"tests/no-std\"")
 
             echo $members | jq -r ".[]" | while read -r member; do
               check_msrv $member
