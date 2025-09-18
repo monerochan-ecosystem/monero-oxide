@@ -482,7 +482,7 @@ dependencies = [
  "generalized-bulletproofs",
  "generalized-bulletproofs-circuit-abstraction",
  "generalized-bulletproofs-ec-gadgets",
- "generic-array 1.2.0",
+ "generic-array 1.1.1",
  "helioselene",
  "multiexp",
  "rand_core",
@@ -560,7 +560,7 @@ version = "0.1.0"
 dependencies = [
  "ciphersuite",
  "generalized-bulletproofs-circuit-abstraction",
- "generic-array 1.2.0",
+ "generic-array 1.1.1",
  "std-shims",
 ]
 
@@ -577,9 +577,9 @@ dependencies = [
 
 [[package]]
 name = "generic-array"
-version = "1.2.0"
+version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8c8444bc9d71b935156cc0ccab7f622180808af7867b1daae6547d773591703"
+checksum = "2cb8bc4c28d15ade99c7e90b219f30da4be5c88e586277e8cbe886beeb868ab2"
 dependencies = [
  "typenum",
 ]
@@ -847,7 +847,7 @@ checksum = "0209ec7c2b5573660a3c5d0f64c90f8ff286171b15ad2234e7a3fbf8f26180be"
 dependencies = [
  "crypto-bigint",
  "ff",
- "generic-array 1.2.0",
+ "generic-array 1.1.1",
  "group",
  "rand_core",
  "rustversion",
@@ -982,7 +982,7 @@ dependencies = [
  "full-chain-membership-proofs",
  "generalized-bulletproofs",
  "generalized-bulletproofs-ec-gadgets",
- "generic-array 1.2.0",
+ "generic-array 1.1.1",
  "helioselene",
  "modular-frost",
  "monero-generators",
@@ -1746,9 +1746,9 @@ checksum = "1dccffe3ce07af9386bfd29e80c0ab1a8205a2fc34e4bcd40364df902cfa8f3f"
 
 [[package]]
 name = "unicode-ident"
-version = "1.0.19"
+version = "1.0.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f63a545481291138910575129486daeaf8ac54aee4387fe7906919f7830c7d9d"
+checksum = "e91b56cd4cadaeb79bbf1a5645f6b4f8dc5bde8834ad5894a8db35fda9efa1fe"
 
 [[package]]
 name = "untrusted"
