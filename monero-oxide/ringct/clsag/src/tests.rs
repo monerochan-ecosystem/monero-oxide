@@ -50,7 +50,7 @@ fn clsag() {
         .push([dest.deref() * ED25519_BASEPOINT_TABLE, Commitment::new(mask, amount).calculate()]);
     }
 
-    let (mut clsag, pseudo_out) = Clsag::sign(
+    let (clsag, pseudo_out) = Clsag::sign(
       &mut OsRng,
       vec![(
         secrets.0.clone(),
@@ -67,13 +67,36 @@ fn clsag() {
     .unwrap()
     .swap_remove(0);
 
-    let image = biased_hash_to_point((ED25519_BASEPOINT_TABLE * secrets.0.deref()).compress().0) *
-      secrets.0.deref();
-    clsag.verify(&ring, &image, &pseudo_out, &msg_hash).unwrap();
+    let pseudo_out = pseudo_out.compress().into();
+
+    let image = (biased_hash_to_point((ED25519_BASEPOINT_TABLE * secrets.0.deref()).compress().0) *
+      secrets.0.deref())
+    .compress()
+    .into();
+
+    let ring =
+      ring.iter().map(|r| [r[0].compress().into(), r[1].compress().into()]).collect::<Vec<_>>();
+
+    clsag.verify(ring.clone(), &image, &pseudo_out, &msg_hash).unwrap();
+
+    // Test verification fails if we malleate a ring member
+    {
+      use curve25519_dalek::traits::IsIdentity;
+
+      let mut ring = ring.clone();
+      let torsion = curve25519_dalek::edwards::CompressedEdwardsY([0; 32]).decompress().unwrap();
+      assert!(!torsion.is_identity());
+      assert!(!torsion.is_torsion_free());
+      ring[0][0] = (ring[0][0].decompress().unwrap() + torsion).compress().into();
+      assert!(clsag.verify(ring, &image, &pseudo_out, &msg_hash).is_err());
+    }
 
     // make sure verification fails if we throw a random `c1` at it.
-    clsag.c1 = Scalar::random(&mut OsRng);
-    assert!(clsag.verify(&ring, &image, &pseudo_out, &msg_hash).is_err());
+    {
+      let mut clsag = clsag.clone();
+      clsag.c1 = Scalar::random(&mut OsRng);
+      assert!(clsag.verify(ring, &image, &pseudo_out, &msg_hash).is_err());
+    }
   }
 }
 

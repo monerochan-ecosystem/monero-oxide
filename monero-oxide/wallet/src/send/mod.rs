@@ -10,7 +10,7 @@ use zeroize::{Zeroize, Zeroizing};
 use rand_core::{RngCore, CryptoRng};
 use rand::seq::SliceRandom;
 
-use curve25519_dalek::{constants::ED25519_BASEPOINT_TABLE, Scalar, EdwardsPoint};
+use curve25519_dalek::{constants::ED25519_BASEPOINT_TABLE, Scalar};
 #[cfg(feature = "multisig")]
 use frost::FrostError;
 
@@ -21,9 +21,9 @@ use crate::{
     clsag::{ClsagError, ClsagContext, Clsag},
     RctType, RctPrunable, RctProofs,
   },
-  transaction::Transaction,
+  transaction::{INPUTS_UPPER_BOUND, Transaction},
   address::{Network, SubaddressIndex, MoneroAddress},
-  extra::MAX_ARBITRARY_DATA_SIZE,
+  extra::{MAX_ARBITRARY_DATA_SIZE, MAX_EXTRA_SIZE_BY_RELAY_RULE},
   rpc::FeeRate,
   ViewPair, GuaranteedViewPair, OutputWithDecoys,
 };
@@ -39,8 +39,8 @@ mod multisig;
 #[cfg(feature = "multisig")]
 pub use multisig::{TransactionMachine, TransactionSignMachine, TransactionSignatureMachine};
 
-pub(crate) fn key_image_sort(x: &EdwardsPoint, y: &EdwardsPoint) -> core::cmp::Ordering {
-  x.compress().to_bytes().cmp(&y.compress().to_bytes()).reverse()
+pub(crate) fn key_image_sort(x: &CompressedPoint, y: &CompressedPoint) -> core::cmp::Ordering {
+  x.cmp(y).reverse()
 }
 
 #[derive(Clone, PartialEq, Eq, Zeroize)]
@@ -215,7 +215,7 @@ pub enum SendError {
 }
 
 /// A signable transaction.
-#[derive(Clone, PartialEq, Eq, Debug, Zeroize)]
+#[derive(Clone, PartialEq, Eq, Zeroize)]
 pub struct SignableTransaction {
   rct_type: RctType,
   outgoing_view_key: Zeroizing<[u8; 32]>,
@@ -225,9 +225,21 @@ pub struct SignableTransaction {
   fee_rate: FeeRate,
 }
 
+impl fmt::Debug for SignableTransaction {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    f.debug_struct("SignableTransaction")
+      .field("rct_type", &self.rct_type)
+      .field("inputs", &self.inputs)
+      .field("payments", &self.payments)
+      .field("data", &self.data)
+      .field("fee_rate", &self.fee_rate)
+      .finish_non_exhaustive()
+  }
+}
+
 struct SignableTransactionWithKeyImages {
   intent: SignableTransaction,
-  key_images: Vec<EdwardsPoint>,
+  key_images: Vec<CompressedPoint>,
 }
 
 impl SignableTransaction {
@@ -294,9 +306,7 @@ impl SignableTransaction {
     }
 
     // Check the length of TX extra
-    // https://github.com/monero-project/monero/pull/8733
-    const MAX_EXTRA_SIZE: usize = 1060;
-    if self.extra().len() > MAX_EXTRA_SIZE {
+    if self.extra().len() > MAX_EXTRA_SIZE_BY_RELAY_RULE {
       Err(SendError::TooMuchArbitraryData)?;
     }
 
@@ -469,7 +479,43 @@ impl SignableTransaction {
   /// defined serialization.
   pub fn read<R: io::Read>(r: &mut R) -> io::Result<SignableTransaction> {
     fn read_address<R: io::Read>(r: &mut R) -> io::Result<MoneroAddress> {
-      String::from_utf8(read_vec(read_byte, None, r)?)
+      /*
+        This uses featured addresses for a bound as they'll always be potentially larger than
+        traditional addresses.
+
+        https://gist.github.com/kayabaNerve/01c50bbc35441e0bbdcee63a9d823789
+      */
+      const FEATURED_ADDRESS_DATA_SIZE_UPPER_BOUND: usize = 9 + 32 + 32 + 9 + 8;
+      // Checksum
+      const FEATURED_ADDRESS_CHECKED_DATA_SIZE_UPPER_BOUND: usize =
+        FEATURED_ADDRESS_DATA_SIZE_UPPER_BOUND + 4;
+      // Base58-encoding, using 5 for `log2(58)`
+      const FEATURED_ADDRESS_ENCODED_SIZE_UPPER_BOUND: usize =
+        (FEATURED_ADDRESS_CHECKED_DATA_SIZE_UPPER_BOUND * 8).div_ceil(5);
+
+      /*
+        https://gist.github.com/tevador
+          /50160d160d24cfc6c52ae02eb3d17024?permalink_comment_id=4744307#gistcomment-4744307
+        notes one JAMTIS proposal which used 247 bytes, while most are 244 bytes. JAMTIS-RCT is
+        244 (https://gist.github.com/tevador/d3656a217c0177c160b9b6219d9ebb96).
+      */
+      const JAMTIS_ADDRESS_ENCODED_SIZE: usize = 247;
+
+      const fn const_max(a: usize, b: usize) -> usize {
+        if a > b {
+          a
+        } else {
+          b
+        }
+      }
+      const ADDRESS_ENCODED_SIZE_UPPER_BOUND: usize =
+        const_max(FEATURED_ADDRESS_ENCODED_SIZE_UPPER_BOUND, JAMTIS_ADDRESS_ENCODED_SIZE);
+
+      const ADDRESS_ENCODED_SIZE_SAFETY_FACTOR: usize = 2;
+      const ADDRESS_ENCODED_SIZE_BOUND: usize =
+        ADDRESS_ENCODED_SIZE_SAFETY_FACTOR * ADDRESS_ENCODED_SIZE_UPPER_BOUND;
+
+      String::from_utf8(read_vec(read_byte, Some(ADDRESS_ENCODED_SIZE_BOUND), r)?)
         .ok()
         .and_then(|str| MoneroAddress::from_str_with_unchecked_network(&str).ok())
         .ok_or_else(|| io::Error::other("invalid address"))
@@ -497,9 +543,17 @@ impl SignableTransaction {
       rct_type: RctType::try_from(read_byte(r)?)
         .map_err(|()| io::Error::other("unsupported/invalid RctType"))?,
       outgoing_view_key: Zeroizing::new(read_bytes(r)?),
-      inputs: read_vec(OutputWithDecoys::read, None, r)?,
-      payments: read_vec(read_payment, None, r)?,
-      data: read_vec(|r| read_vec(read_byte, None, r), None, r)?,
+      inputs: read_vec(OutputWithDecoys::read, Some(INPUTS_UPPER_BOUND), r)?,
+      payments: read_vec(read_payment, Some(MAX_BULLETPROOF_COMMITMENTS), r)?,
+      /*
+        This doesn't assert the _total_ length is `< MAX_EXTRA_SIZE_BY_RELAY_RULE`, yet the
+        following call to `validate` will.
+      */
+      data: read_vec(
+        |r| read_vec(read_byte, Some(MAX_ARBITRARY_DATA_SIZE), r),
+        Some(MAX_EXTRA_SIZE_BY_RELAY_RULE),
+        r,
+      )?,
       fee_rate: FeeRate::read(r)?,
     };
     match res.validate() {
@@ -509,7 +563,10 @@ impl SignableTransaction {
     Ok(res)
   }
 
-  fn with_key_images(mut self, key_images: Vec<EdwardsPoint>) -> SignableTransactionWithKeyImages {
+  fn with_key_images(
+    mut self,
+    key_images: Vec<CompressedPoint>,
+  ) -> SignableTransactionWithKeyImages {
     debug_assert_eq!(self.inputs.len(), key_images.len());
 
     // Sort the inputs by their key images
@@ -541,7 +598,7 @@ impl SignableTransaction {
         Err(SendError::WrongPrivateKey)?;
       }
       let key_image = input_key.deref() * biased_hash_to_point(input.key().compress().to_bytes());
-      key_images.push(key_image);
+      key_images.push(CompressedPoint::from(key_image.compress()));
     }
 
     // Convert to a SignableTransactionWithKeyImages
@@ -591,7 +648,7 @@ impl SignableTransaction {
     *pseudo_outs = Vec::with_capacity(inputs_len);
     for (clsag, pseudo_out) in clsags_and_pseudo_outs {
       clsags.push(clsag);
-      pseudo_outs.push(pseudo_out);
+      pseudo_outs.push(CompressedPoint::from(pseudo_out.compress()));
     }
 
     // Return the signed TX

@@ -17,7 +17,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 workspace = true
 
 [dependencies]
-# Helioselene SHOULD work on `no-std`, yet it uses `std-shims` dependency which requires `alloc`
+# Helioselene SHOULD work on `no-std`, yet it uses `std-shims` which requires `alloc`
 helioselene = { path = "../../crypto/helioselene", default-features = false, optional = true }
 
 monero-wallet = { path = "../../monero-oxide/wallet", default-features = false, features = ["compile-time-generators"], optional = true }

@@ -6,16 +6,12 @@
 use core::fmt::Debug;
 #[allow(unused_imports)]
 use std_shims::prelude::*;
-use std_shims::{
-  vec,
-  vec::Vec,
-  io::{self, Read, Write},
-};
+use std_shims::io::{self, Read, Write};
 
-use curve25519_dalek::{
-  scalar::Scalar,
-  edwards::{EdwardsPoint, CompressedEdwardsY},
-};
+use curve25519_dalek::{scalar::Scalar, edwards::EdwardsPoint};
+
+mod compressed_point;
+pub use compressed_point::CompressedPoint;
 
 const VARINT_CONTINUATION_MASK: u8 = 0b1000_0000;
 
@@ -102,12 +98,12 @@ pub fn write_scalar<W: Write>(scalar: &Scalar, w: &mut W) -> io::Result<()> {
 
 /// Write a point.
 pub fn write_point<W: Write>(point: &EdwardsPoint, w: &mut W) -> io::Result<()> {
-  w.write_all(&point.compress().to_bytes())
+  CompressedPoint(point.compress().to_bytes()).write(w)
 }
 
 /// Write a list of elements, without length-prefixing.
-pub fn write_raw_vec<T, W: Write, F: Fn(&T, &mut W) -> io::Result<()>>(
-  f: F,
+pub fn write_raw_vec<T, W: Write, F: FnMut(&T, &mut W) -> io::Result<()>>(
+  mut f: F,
   values: &[T],
   w: &mut W,
 ) -> io::Result<()> {
@@ -118,7 +114,7 @@ pub fn write_raw_vec<T, W: Write, F: Fn(&T, &mut W) -> io::Result<()>>(
 }
 
 /// Write a list of elements, with length-prefixing.
-pub fn write_vec<T, W: Write, F: Fn(&T, &mut W) -> io::Result<()>>(
+pub fn write_vec<T, W: Write, F: FnMut(&T, &mut W) -> io::Result<()>>(
   f: F,
   values: &[T],
   w: &mut W,
@@ -183,42 +179,17 @@ pub fn read_scalar<R: Read>(r: &mut R) -> io::Result<Scalar> {
     .ok_or_else(|| io::Error::other("unreduced scalar"))
 }
 
-/// Decompress a canonically-encoded Ed25519 point.
-///
-/// Ed25519 is of order `8 * l`. This function ensures each of those `8 * l` points have a singular
-/// encoding by checking points aren't encoded with an unreduced field element, and aren't negative
-/// when the negative is equivalent (0 == -0).
-///
-/// Since this decodes an Ed25519 point, it does not check the point is in the prime-order
-/// subgroup. Torsioned points do have a canonical encoding, and only aren't canonical when
-/// considered in relation to the prime-order subgroup.
-pub fn decompress_point(bytes: [u8; 32]) -> Option<EdwardsPoint> {
-  CompressedEdwardsY(bytes)
-    .decompress()
-    // Ban points which are either unreduced or -0
-    .filter(|point| point.compress().to_bytes() == bytes)
-}
-
 /// Read a canonically-encoded Ed25519 point.
 ///
-/// This internally calls `decompress_point` and has the same definition of canonicity. This
-/// function does not check the resulting point is within the prime-order subgroup.
+/// This internally calls [`CompressedPoint::decompress`] and has the same definition of canonicity.
+/// This function does not check the resulting point is within the prime-order subgroup.
 pub fn read_point<R: Read>(r: &mut R) -> io::Result<EdwardsPoint> {
-  let bytes = read_bytes(r)?;
-  decompress_point(bytes).ok_or_else(|| io::Error::other("invalid point"))
-}
-
-/// Read a canonically-encoded Ed25519 point, within the prime-order subgroup.
-pub fn read_torsion_free_point<R: Read>(r: &mut R) -> io::Result<EdwardsPoint> {
-  read_point(r)
-    .ok()
-    .filter(EdwardsPoint::is_torsion_free)
-    .ok_or_else(|| io::Error::other("invalid point"))
+  CompressedPoint::read(r)?.decompress().ok_or_else(|| io::Error::other("invalid point"))
 }
 
 /// Read a variable-length list of elements, without length-prefixing.
-pub fn read_raw_vec<R: Read, T, F: Fn(&mut R) -> io::Result<T>>(
-  f: F,
+pub fn read_raw_vec<R: Read, T, F: FnMut(&mut R) -> io::Result<T>>(
+  mut f: F,
   len: usize,
   r: &mut R,
 ) -> io::Result<Vec<T>> {
@@ -230,7 +201,7 @@ pub fn read_raw_vec<R: Read, T, F: Fn(&mut R) -> io::Result<T>>(
 }
 
 /// Read a constant-length list of elements.
-pub fn read_array<R: Read, T: Debug, F: Fn(&mut R) -> io::Result<T>, const N: usize>(
+pub fn read_array<R: Read, T: Debug, F: FnMut(&mut R) -> io::Result<T>, const N: usize>(
   f: F,
   r: &mut R,
 ) -> io::Result<[T; N]> {
@@ -246,7 +217,7 @@ pub fn read_array<R: Read, T: Debug, F: Fn(&mut R) -> io::Result<T>, const N: us
 /// An optional bound on the length of the result may be provided. If `None`, the returned `Vec`
 /// will be of the length read off the reader, if successfully read. If `Some(_)`, an error will be
 /// raised if the length read off the read is greater than the bound.
-pub fn read_vec<R: Read, T, F: Fn(&mut R) -> io::Result<T>>(
+pub fn read_vec<R: Read, T, F: FnMut(&mut R) -> io::Result<T>>(
   f: F,
   length_bound: Option<usize>,
   r: &mut R,

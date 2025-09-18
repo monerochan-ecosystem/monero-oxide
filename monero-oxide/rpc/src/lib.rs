@@ -239,11 +239,12 @@ fn hash_hex(hash: &str) -> Result<[u8; 32], RpcError> {
 }
 
 fn rpc_point(point: &str) -> Result<EdwardsPoint, RpcError> {
-  decompress_point(
+  CompressedPoint(
     rpc_hex(point)?
       .try_into()
       .map_err(|_| RpcError::InvalidNode(format!("invalid point: {point}")))?,
   )
+  .decompress()
   .ok_or_else(|| RpcError::InvalidNode(format!("invalid point: {point}")))
 }
 
@@ -1230,6 +1231,10 @@ impl<R: Rpc> DecoyRpc for R {
 
         if rpc_res.status != "OK" {
           Err(RpcError::InvalidNode("bad response to get_outs".to_string()))?;
+        }
+
+        if rpc_res.outs.len() != indexes.len() {
+          Err(RpcError::InvalidNode("get_outs response omitted requested outputs".to_string()))?;
         }
 
         res.extend(

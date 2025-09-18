@@ -1,8 +1,11 @@
-use curve25519_dalek::edwards::{EdwardsPoint, CompressedEdwardsY};
+use curve25519_dalek::edwards::EdwardsPoint;
 
 use crate::{
-  io::write_varint,
-  extra::{MAX_TX_EXTRA_PADDING_COUNT, ExtraField, Extra},
+  io::{CompressedPoint, write_varint},
+  extra::{
+    ARBITRARY_DATA_MARKER, MAX_TX_EXTRA_PADDING_COUNT, MAX_EXTRA_SIZE_BY_RELAY_RULE, ExtraField,
+    Extra,
+  },
 };
 
 // Tests derived from
@@ -60,7 +63,7 @@ const PUB_KEY_BYTES: [u8; 33] = [
 ];
 
 fn pub_key() -> EdwardsPoint {
-  CompressedEdwardsY(PUB_KEY_BYTES[1 .. PUB_KEY_BYTES.len()].try_into().expect("invalid pub key"))
+  CompressedPoint(PUB_KEY_BYTES[1 .. PUB_KEY_BYTES.len()].try_into().expect("invalid pub key"))
     .decompress()
     .unwrap()
 }
@@ -200,4 +203,39 @@ fn extra_mysterious_minergate_and_pub_key() {
     vec![ExtraField::MysteriousMinergate(vec![42]), ExtraField::PublicKey(pub_key())]
   );
   test_write_buf(&extra, &buf);
+}
+
+#[test]
+fn fetching_data_does_not_panic() {
+  assert!(Extra::read(&mut [0x02, 0x00].as_slice()).unwrap().data().is_empty());
+  assert_eq!(
+    Extra::read(&mut [0x02, 0x01, 0x7F].as_slice()).unwrap().data(),
+    vec![Vec::<u8>::new()]
+  );
+}
+
+#[test]
+fn fetching_long_data_does_not_panic() {
+  use curve25519_dalek::traits::Identity;
+  let mut extra = Extra::new(EdwardsPoint::identity(), vec![]);
+
+  let mut arb_data = vec![0; 200];
+  arb_data[0] = ARBITRARY_DATA_MARKER;
+
+  // Push sets of arbitrary data
+  for _ in 0 .. 5 {
+    extra.push_nonce(arb_data.clone());
+  }
+  // Confirm we're within policy
+  assert!(extra.serialize().len() < MAX_EXTRA_SIZE_BY_RELAY_RULE);
+
+  // Push one more
+  extra.push_nonce(arb_data.clone());
+  // Confirm we're no longer in policy
+  assert!(extra.serialize().len() > MAX_EXTRA_SIZE_BY_RELAY_RULE);
+
+  // The extra should encode and decode
+  assert_eq!(Extra::read(&mut extra.serialize().as_slice()).unwrap(), extra);
+  // Yet we should only read arbitrary data from the set within policy
+  assert_eq!(extra.data().len(), 5);
 }

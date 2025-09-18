@@ -19,7 +19,7 @@ ignored = ["monero-fcmp-plus-plus"]
 workspace = true
 
 [dependencies]
-std-shims = { version = "0.1.4", default-features = false }
+std-shims = { version = "0.1.5", default-features = false }
 
 zeroize = { version = "^1.5", default-features = false, features = ["zeroize_derive"] }
 

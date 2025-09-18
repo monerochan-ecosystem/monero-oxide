@@ -5,7 +5,7 @@
 
 #[allow(unused_imports)]
 use std_shims::prelude::*;
-use std_shims::{io, vec::Vec};
+use std_shims::io;
 #[cfg(feature = "std")]
 use std_shims::sync::LazyLock;
 
@@ -14,7 +14,7 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 use sha3::{Digest, Keccak256};
 use curve25519_dalek::{
   constants::ED25519_BASEPOINT_POINT,
-  traits::VartimePrecomputedMultiscalarMul,
+  traits::{MultiscalarMul, VartimePrecomputedMultiscalarMul},
   scalar::Scalar,
   edwards::{EdwardsPoint, VartimeEdwardsPrecomputation},
 };
@@ -112,7 +112,7 @@ impl Commitment {
 
   /// Calculate the Pedersen commitment, as a point, from this transparent structure.
   pub fn calculate(&self) -> EdwardsPoint {
-    EdwardsPoint::vartime_double_scalar_mul_basepoint(&Scalar::from(self.amount), &H, &self.mask)
+    EdwardsPoint::multiscalar_mul([self.mask, self.amount.into()], [ED25519_BASEPOINT_POINT, *H])
   }
 
   /// Write the Commitment.
@@ -161,6 +161,14 @@ impl core::fmt::Debug for Decoys {
   }
 }
 
+/*
+  The max ring size the monero-oxide libraries is programmed to support creating.
+
+  This exceeds the current Monero protocol's ring size of `16`, with the next hard fork planned to
+  remove rings entirely, making this without issue.
+*/
+const MAX_RING_SIZE: usize = u8::MAX as usize;
+
 #[allow(clippy::len_without_is_empty)]
 impl Decoys {
   /// Create a new instance of decoy data.
@@ -168,7 +176,7 @@ impl Decoys {
   /// `offsets` are the positions of each ring member within the Monero blockchain, offset from the
   /// prior member's position (with the initial ring member offset from 0).
   pub fn new(offsets: Vec<u64>, signer_index: u8, ring: Vec<[EdwardsPoint; 2]>) -> Option<Self> {
-    if (offsets.len() > usize::from(u8::MAX)) ||
+    if (offsets.len() > MAX_RING_SIZE) ||
       (offsets.len() != ring.len()) ||
       (usize::from(signer_index) >= ring.len())
     {
@@ -252,7 +260,7 @@ impl Decoys {
   /// This is not a Monero protocol defined struct, and this is accordingly not a Monero protocol
   /// defined serialization.
   pub fn read(r: &mut impl io::Read) -> io::Result<Decoys> {
-    let offsets = read_vec(read_varint, None, r)?;
+    let offsets = read_vec(read_varint, Some(MAX_RING_SIZE), r)?;
     let len = offsets.len();
     Decoys::new(
       offsets,
