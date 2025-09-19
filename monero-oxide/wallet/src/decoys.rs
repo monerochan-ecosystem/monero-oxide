@@ -21,6 +21,106 @@ const RECENT_WINDOW: u64 = 15;
 const BLOCKS_PER_YEAR: usize = (365 * 24 * 60 * 60) / BLOCK_TIME;
 #[allow(clippy::cast_precision_loss)]
 const TIP_APPLICATION: f64 = (DEFAULT_LOCK_WINDOW * BLOCK_TIME) as f64;
+/// Samples candidates for decoys for an output being spent.
+/// This is a lower-level function which expects the distribution to be provided by the node.
+/// Sampling will stop if it cannot find enough candidates in 1000 iterations.
+/// (There is no need to sample significantly more than the 15 decoys required for a ring)
+fn sample_candidates(
+  rng: &mut (impl RngCore + CryptoRng),
+  output_being_spent_index: u64,
+  distribution: &[u64],
+  candidates_len: usize,
+) -> Result<Vec<u64>, RpcError> {
+  let mut candidates = Vec::with_capacity(candidates_len);
+  if distribution.len() < DEFAULT_LOCK_WINDOW {
+    Err(RpcError::InternalError("not enough blocks to select decoys".to_string()))?;
+  }
+  let highest_output_exclusive_bound = distribution[distribution.len() - DEFAULT_LOCK_WINDOW];
+  // This assumes that each miner TX had one output (as sane) and checks we have sufficient
+  // outputs even when excluding them (due to their own timelock requirements)
+  // Considering this a temporal error for very new chains, it's sufficiently sane to have
+  if highest_output_exclusive_bound.saturating_sub(
+    u64::try_from(COINBASE_LOCK_WINDOW).expect("coinbase lock window exceeds 2^{64}"),
+  ) < candidates_len as u64
+  {
+    Err(RpcError::InternalError("not enough decoy candidates".to_string()))?;
+  }
+
+  // Determine the outputs per second
+  #[allow(clippy::cast_precision_loss)]
+  let per_second = {
+    let blocks = distribution.len().min(BLOCKS_PER_YEAR);
+    let initial = distribution[distribution.len().saturating_sub(blocks + 1)];
+    let outputs = distribution[distribution.len() - 1].saturating_sub(initial);
+    (outputs as f64) / ((blocks * BLOCK_TIME) as f64)
+  };
+
+  // Don't select the real output
+  let mut do_not_select = HashSet::new();
+  do_not_select.insert(output_being_spent_index);
+  let mut iters = 0;
+
+  while candidates.len() <= candidates_len {
+    {
+      iters += 1;
+      #[cfg(not(test))]
+      const MAX_ITERS: usize = 1000;
+      // When testing on fresh chains, increased iterations can be useful and we don't necessitate
+      // reasonable performance
+      #[cfg(test)]
+      const MAX_ITERS: usize = 10000;
+      // Ensure this isn't infinitely looping
+      // We check both that we aren't at the maximum amount of iterations and that the not-yet
+      // selected candidates exceed the amount of candidates necessary to trigger the next iteration
+      if (iters == MAX_ITERS) ||
+        ((highest_output_exclusive_bound -
+          u64::try_from(do_not_select.len())
+            .expect("amount of ignored decoys exceeds 2^{64}")) <
+          candidates_len as u64)
+      {
+        Err(RpcError::InternalError("hit decoy selection round limit".to_string()))?;
+      }
+    }
+    // Use a gamma distribution, as Monero does
+    // https://github.com/monero-project/monero/blob/cc73fe71162d564ffda8e549b79a350bca53c45
+    //   /src/wallet/wallet2.cpp#L142-L143
+    let mut age = Gamma::<f64>::new(19.28, 1.0 / 1.61)
+      .expect("constant Gamma distribution could no longer be created")
+      .sample(rng)
+      .exp();
+    #[allow(clippy::cast_precision_loss)]
+    if age > TIP_APPLICATION {
+      age -= TIP_APPLICATION;
+    } else {
+      // f64 does not have try_from available, which is why these are written with `as`
+      age = (rng.next_u64() %
+        (RECENT_WINDOW * u64::try_from(BLOCK_TIME).expect("BLOCK_TIME exceeded u64::MAX")))
+        as f64;
+    }
+
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    let o: u64 = (age * per_second) as u64;
+    if o < highest_output_exclusive_bound {
+      // Find which block this points to
+      let i = distribution.partition_point(|s| *s < (highest_output_exclusive_bound - 1 - o));
+      let prev = i.saturating_sub(1);
+      let n = distribution[i].checked_sub(distribution[prev]).ok_or_else(|| {
+        RpcError::InternalError("RPC returned non-monotonic distribution".to_string())
+      })?;
+      if n != 0 {
+        // Select an output from within this block
+        let o = distribution[prev] + (rng.next_u64() % n);
+        if !do_not_select.contains(&o) {
+          candidates.push(o);
+          // This output will either be used or is unusable
+          // In either case, we should not try it again
+          do_not_select.insert(o);
+        }
+      }
+    }
+  }
+  Ok(candidates)
+}
 
 async fn select_n(
   rng: &mut (impl RngCore + CryptoRng),
