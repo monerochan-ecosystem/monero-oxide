@@ -119,6 +119,10 @@ fn sample_candidates(
       }
     }
   }
+  candidates.push(output_being_spent_index);
+  // Sort candidates so the real spends aren't the ones at the end
+  candidates.sort();
+
   Ok(candidates)
 }
 
