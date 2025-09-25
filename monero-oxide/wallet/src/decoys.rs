@@ -1,3 +1,5 @@
+use monero_oxide::transaction::Transaction;
+use monero_rpc::OutputInformation;
 use std_shims::{io, vec::Vec, string::ToString, collections::HashSet};
 
 use zeroize::{Zeroize, ZeroizeOnDrop};
@@ -15,6 +17,7 @@ use crate::{
   rpc::{RpcError, DecoyRpc},
   output::OutputData,
   WalletOutput,
+  transaction::Timelock,
 };
 
 const RECENT_WINDOW: u64 = 15;
@@ -124,6 +127,118 @@ fn sample_candidates(
   candidates.sort();
 
   Ok(candidates)
+}
+/// Filters the outputs returned by the RPC to only those which are usable as decoys.
+/// This includes checking that the output is unlocked, that it matches the key and commitment
+/// of the output being spent (for the real spend), to ensure the node is responding honestly
+fn filter_outputs(
+  output_being_spent: &WalletOutput,
+  candidates: Vec<u64>,
+  outs: Vec<OutputInformation>,
+) -> Result<Vec<(u64, [EdwardsPoint; 2])>, RpcError> {
+  if candidates.len() != outs.len() {
+    Err(RpcError::InvalidNode("get_outs response omitted requested outputs".to_string()))?;
+  }
+  let spend_position = candidates
+    .binary_search(&output_being_spent.index_on_blockchain())
+    .expect("selected a ring which didn't include the real spend");
+  let mut res = Vec::new();
+  for (i, out) in outs.into_iter().enumerate() {
+    if !out.unlocked {
+      continue;
+    }
+    let key = match out.key.decompress() {
+      Some(k) => k,
+      None => continue,
+    };
+    let commitment = out.commitment;
+    if i == spend_position {
+      // Check it's actually the real spend
+      if (output_being_spent.key() != key) ||
+        (output_being_spent.commitment().calculate() != commitment)
+      {
+        Err(RpcError::InvalidNode(
+          "node presented different view of output we're trying to spend".to_string(),
+        ))?;
+      }
+
+      continue;
+    }
+    // Unless torsion is present
+    // https://github.com/monero-project/monero/blob/893916ad091a92e765ce3241b94e706ad012b62a
+    //   /src/wallet/wallet2.cpp#L9050-L9060
+    {
+      if !(key.is_torsion_free() && commitment.is_torsion_free()) {
+        continue;
+      }
+    }
+    res.push((candidates[i], [key, commitment]));
+  }
+  Ok(res)
+}
+/// Filters the outputs returned by the RPC to only those which are usable as decoys.
+/// This includes checking that the output is unlocked, that it matches the key and commitment
+/// of the output being spent (for the real spend), to ensure the node is responding honestly
+/// the output is checked to be unlocked based on the current height and transaction data.
+/// (instead of relying on the node to tell us if it's unlocked)
+fn filter_outputs_deterministic(
+  output_being_spent: &WalletOutput,
+  candidates: Vec<u64>,
+  outs: Vec<OutputInformation>,
+  transactions: Vec<Transaction>,
+  height: usize,
+) -> Result<Vec<(u64, [EdwardsPoint; 2])>, RpcError> {
+  if candidates.len() != outs.len() {
+    Err(RpcError::InvalidNode("get_outs response omitted requested outputs".to_string()))?;
+  }
+  let spend_position = candidates
+    .binary_search(&output_being_spent.index_on_blockchain())
+    .expect("selected a ring which didn't include the real spend");
+  let mut res = Vec::new();
+  for (i, out) in outs.into_iter().enumerate() {
+    // https://github.com/monero-project/monero/blob
+    //   /cc73fe71162d564ffda8e549b79a350bca53c454/src/cryptonote_core
+    //   /blockchain.cpp#L90
+    const ACCEPTED_TIMELOCK_DELTA: usize = 1;
+
+    // https://github.com/monero-project/monero/blob
+    //   /cc73fe71162d564ffda8e549b79a350bca53c454/src/cryptonote_core
+    //   /blockchain.cpp#L3836
+    if !(out.height.checked_add(DEFAULT_LOCK_WINDOW).is_some_and(|locked| locked <= height) &&
+      (Timelock::Block(height.wrapping_add(ACCEPTED_TIMELOCK_DELTA - 1)) >=
+        transactions[i].prefix().additional_timelock))
+    {
+      continue;
+    }
+
+    let key = match out.key.decompress() {
+      Some(k) => k,
+      None => continue,
+    };
+    let commitment = out.commitment;
+    if i == spend_position {
+      // Check it's actually the real spend
+      if (output_being_spent.key() != key) ||
+        (output_being_spent.commitment().calculate() != commitment)
+      {
+        Err(RpcError::InvalidNode(
+          "node presented different view of output we're trying to spend".to_string(),
+        ))?;
+      }
+
+      continue;
+    }
+    // Unless torsion is present
+    // https://github.com/monero-project/monero/blob/893916ad091a92e765ce3241b94e706ad012b62a
+    //   /src/wallet/wallet2.cpp#L9050-L9060
+    {
+      if !(key.is_torsion_free() && commitment.is_torsion_free()) {
+        continue;
+      }
+    }
+    res.push((candidates[i], [key, commitment]));
+  }
+  Ok(res)
 }
 
 async fn select_n(
