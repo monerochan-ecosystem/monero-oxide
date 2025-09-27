@@ -240,6 +240,61 @@ fn filter_outputs_deterministic(
   }
   Ok(res)
 }
+/// Turns potential decoys into a ring with the real spend included.
+/// (If there are enough potential decoys, otherwise, returns an error)
+fn make_ring(
+  ring_len: u8,
+  input: &WalletOutput,
+  potential_decoys: Vec<(u64, [EdwardsPoint; 2])>,
+) -> Result<OutputWithDecoys, RpcError> {
+  if ring_len == 0 {
+    Err(RpcError::InternalError("requesting a ring of length 0".to_string()))?;
+  }
+  if potential_decoys.len() < (ring_len - 1) as usize {
+    Err(RpcError::InternalError("potential decoy list too short to form ring".to_string()))?;
+  }
+
+  // Select all decoys for this transaction, assuming we generate a sane transaction
+  // We should almost never naturally generate an insane transaction, hence why this doesn't
+  // bother with an overage
+
+  // Form the complete ring
+  let mut ring = potential_decoys[.. ring_len as usize - 1].to_vec();
+  ring.push((input.index_on_blockchain(), [input.key(), input.commitment().calculate()]));
+  ring.sort_by(|a, b| a.0.cmp(&b.0));
+
+  /*
+    Monero does have sanity checks which it applies to the selected ring.
+
+    They're statistically unlikely to be hit and only occur when the transaction is published over
+    the RPC (so they are not a relay rule). The RPC allows disabling them, which monero-rpc does to
+    ensure they don't pose a problem.
+
+    They aren't worth the complexity to implement here, especially since they're non-deterministic.
+  */
+
+  // We need to convert our positional indexes to offset indexes
+  let mut offsets = Vec::with_capacity(ring.len());
+  {
+    offsets.push(ring[0].0);
+    for m in 1 .. ring.len() {
+      offsets.push(ring[m].0 - ring[m - 1].0);
+    }
+  }
+
+  let decoys = Decoys::new(
+    offsets,
+    // Binary searches for the real spend since we don't know where it sorted to
+    // TODO: Define our own collection whose `len` function returns `u8` to ensure this bound
+    // with types
+    u8::try_from(ring.partition_point(|x| x.0 < input.index_on_blockchain()))
+      .expect("ring of size <= u8::MAX had an index exceeding u8::MAX"),
+    ring.into_iter().map(|output| output.1).collect(),
+  )
+  .expect("selected a syntactically-invalid set of Decoys");
+
+  Ok(OutputWithDecoys { output: input.data.clone(), decoys })
+}
 
 async fn select_n(
   rng: &mut (impl RngCore + CryptoRng),
