@@ -10,6 +10,7 @@ use rand_distr::{Distribution, Gamma};
 use rand_distr::num_traits::Float;
 
 use curve25519_dalek::{Scalar, EdwardsPoint};
+use rand::seq::SliceRandom;
 
 use crate::{
   DEFAULT_LOCK_WINDOW, COINBASE_LOCK_WINDOW, BLOCK_TIME,
@@ -243,6 +244,7 @@ fn filter_outputs_deterministic(
 /// Turns potential decoys into a ring with the real spend included.
 /// (If there are enough potential decoys, otherwise, returns an error)
 fn make_ring(
+  rng: &mut (impl RngCore + CryptoRng),
   ring_len: u8,
   input: &WalletOutput,
   potential_decoys: Vec<(u64, [EdwardsPoint; 2])>,
@@ -259,7 +261,8 @@ fn make_ring(
   // bother with an overage
 
   // Form the complete ring
-  let mut ring = potential_decoys[.. ring_len as usize - 1].to_vec();
+  let mut ring =
+    potential_decoys.choose_multiple(rng, ring_len as usize - 1).cloned().collect::<Vec<_>>();
   ring.push((input.index_on_blockchain(), [input.key(), input.commitment().calculate()]));
   ring.sort_by(|a, b| a.0.cmp(&b.0));
 
@@ -298,18 +301,20 @@ fn make_ring(
 /// Use sample_candiates to select canidates, then fetch them as potential decoys from the RPC,
 /// pass the result into this function to prepare the input with decoys for a transaction.
 fn make_output_with_decoys_sync(
+  rng: &mut (impl RngCore + CryptoRng),
   ring_len: u8,
   input: &WalletOutput,
   output_response: Vec<OutputInformation>,
   candidates: Vec<u64>,
 ) -> Result<OutputWithDecoys, RpcError> {
   let potential_decoys = filter_outputs(input, candidates, output_response)?;
-  make_ring(ring_len, input, potential_decoys)
+  make_ring(rng, ring_len, input, potential_decoys)
 }
 /// Use sample_candiates to select canidates, then fetch them as potential decoys from the RPC,
 /// fetch the transactions containing these decoys to determine if outputs are unlocked locally,
 /// pass the result into this function to prepare the input with decoys for a transaction.
 fn make_output_with_decoys_deterministic_sync(
+  rng: &mut (impl RngCore + CryptoRng),
   ring_len: u8,
   input: &WalletOutput,
   output_response: Vec<OutputInformation>,
@@ -319,7 +324,7 @@ fn make_output_with_decoys_deterministic_sync(
 ) -> Result<OutputWithDecoys, RpcError> {
   let potential_decoys =
     filter_outputs_deterministic(input, candidates, output_response, transactions, height)?;
-  make_ring(ring_len, input, potential_decoys)
+  make_ring(rng, ring_len, input, potential_decoys)
 }
 async fn select_n(
   rng: &mut (impl RngCore + CryptoRng),
