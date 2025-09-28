@@ -567,6 +567,28 @@ pub struct OutputWithDecoys {
 }
 
 impl OutputWithDecoys {
+  /// Samples candidates for decoys for an output being spent.
+  /// This is a lower-level function which expects the distribution to be provided by the node.
+  pub fn sample_candidates(
+    rng: &mut (impl RngCore + CryptoRng),
+    output_being_spent_index: u64,
+    distribution: &[u64],
+    candidates_len: usize,
+  ) -> Result<Vec<u64>, RpcError> {
+    sample_candidates(rng, output_being_spent_index, distribution, candidates_len)
+  }
+  /// Select decoys for this output
+  /// This is a lower-level function which expects the output information and candidates to be
+  /// provided by the node.
+  pub fn new_sync(
+    rng: &mut (impl Send + Sync + RngCore + CryptoRng),
+    ring_len: u8,
+    output: WalletOutput,
+    output_response: Vec<OutputInformation>,
+    candidates: Vec<u64>,
+  ) -> Result<OutputWithDecoys, RpcError> {
+    make_output_with_decoys_sync(rng, ring_len, &output, output_response, candidates)
+  }
   /// Select decoys for this output.
   ///
   /// The methodology used to sample decoys SHOULD prevent an RPC controlled by a passive adversary
@@ -581,8 +603,14 @@ impl OutputWithDecoys {
     height: usize,
     output: WalletOutput,
   ) -> Result<OutputWithDecoys, RpcError> {
-    let decoys = select_decoys(rng, rpc, ring_len, height, &output, false).await?;
-    Ok(OutputWithDecoys { output: output.data.clone(), decoys })
+    let candidates = sample_candidates(
+      rng,
+      output.index_on_blockchain(),
+      &rpc.get_output_distribution(.. height).await?,
+      usize::from(ring_len + 20),
+    )?;
+    let output_response = rpc.get_outs(&candidates).await?;
+    OutputWithDecoys::new_sync(rng, ring_len, output, output_response, candidates)
   }
 
   /// Select a set of decoys for this output with a deterministic process.
