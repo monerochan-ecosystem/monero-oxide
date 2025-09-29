@@ -1,5 +1,5 @@
 use monero_oxide::transaction::Transaction;
-use monero_rpc::OutputInformation;
+use monero_rpc::{OutputInformation, Rpc};
 use std_shims::{io, vec::Vec, string::ToString, collections::HashSet};
 
 use zeroize::{Zeroize, ZeroizeOnDrop};
@@ -589,6 +589,28 @@ impl OutputWithDecoys {
   ) -> Result<OutputWithDecoys, RpcError> {
     make_output_with_decoys_sync(rng, ring_len, &output, output_response, candidates)
   }
+  /// Select decoys for this output
+  /// This is a lower-level function which expects the output information and candidates to be
+  /// provided by the node.
+  pub fn new_sync_deterministic(
+    rng: &mut (impl Send + Sync + RngCore + CryptoRng),
+    ring_len: u8,
+    output: WalletOutput,
+    output_response: Vec<OutputInformation>,
+    candidates: Vec<u64>,
+    transactions: Vec<Transaction>,
+    height: usize,
+  ) -> Result<OutputWithDecoys, RpcError> {
+    make_output_with_decoys_deterministic_sync(
+      rng,
+      ring_len,
+      &output,
+      output_response,
+      candidates,
+      transactions,
+      height,
+    )
+  }
   /// Select decoys for this output.
   ///
   /// The methodology used to sample decoys SHOULD prevent an RPC controlled by a passive adversary
@@ -629,13 +651,30 @@ impl OutputWithDecoys {
   /// only connect to trusted RPCs.
   pub async fn fingerprintable_deterministic_new(
     rng: &mut (impl Send + Sync + RngCore + CryptoRng),
-    rpc: &impl DecoyRpc,
+    rpc: &impl Rpc,
     ring_len: u8,
     height: usize,
     output: WalletOutput,
   ) -> Result<OutputWithDecoys, RpcError> {
-    let decoys = select_decoys(rng, rpc, ring_len, height, &output, true).await?;
-    Ok(OutputWithDecoys { output: output.data.clone(), decoys })
+    let candidates = sample_candidates(
+      rng,
+      output.index_on_blockchain(),
+      &rpc.get_output_distribution(.. height).await?,
+      usize::from(ring_len + 20),
+    )?;
+    let output_response = rpc.get_outs(&candidates).await?;
+    let transactions = rpc
+      .get_transactions(&output_response.iter().map(|out| out.transaction).collect::<Vec<_>>())
+      .await?;
+    OutputWithDecoys::new_sync_deterministic(
+      rng,
+      ring_len,
+      output,
+      output_response,
+      candidates,
+      transactions,
+      height,
+    )
   }
 
   /// The key this output may be spent by.
