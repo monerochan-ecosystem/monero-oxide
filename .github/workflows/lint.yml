@@ -147,8 +147,8 @@ jobs:
             # Correct the last line, which was malleated to "],"
             members=$(echo "$members" | sed "$(echo "$members" | wc -l)s/\]\,/\]/")
 
-            # If desired, remove any crates to not be tested here
-            # members=$(echo "$members" | grep -v "CRATE_PATH_TO_SKIP")
+            # Remove any crates not to not be checked
+            members=$(echo "$members" | grep -v "tests/no-std")
 
             # Remove the trailing comma by replacing the last line's "," with ""
             members=$(echo "$members" | sed "$(($(echo "$members" | wc -l) - 1))s/\,//")
