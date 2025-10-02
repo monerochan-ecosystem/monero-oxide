@@ -7,6 +7,7 @@ pair of elliptic curves to:
 - Have a 255-bit $q$
 - Have $3 \cong 4 \mod q$
 - Have $(2^{256} \mod q) < 2^{128}$
+- Have a secure twist
 
 The Monero project [sponsored a competition](
   https://github.com/j-berman/fcmp-plus-plus-optimization-competition

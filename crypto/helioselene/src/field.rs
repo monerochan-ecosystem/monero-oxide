@@ -21,20 +21,20 @@ pub struct HelioseleneField(pub(crate) U256);
 
 /// The modulus of the field.
 const MODULUS: U256 =
-  U256::from_be_hex("7fffffffffffffffffffffffffffffffbf7f782cb7656b586eb6d2727927c79f");
+  U256::from_be_hex("7ffffffffffffffffffffffffffffffff735481d1969f317f9850b68df11df53");
 /// The distance between the modulus and 2**255.
-const MODULUS_255_DISTANCE: U128 = U128::from_le_hex("6138d8868d2d4991a7949a48d3878040");
+const MODULUS_255_DISTANCE: U128 = U128::from_be_hex("08cab7e2e6960ce8067af49720ee20ad");
 /// Twice the distance from the modulus to 2**255.
-const TWO_MODULUS_255_DISTANCE: U128 = U128::from_le_hex("c270b00d1b5b92224f293591a60f0181");
+const TWO_MODULUS_255_DISTANCE: U128 = U128::from_be_hex("11956fc5cd2c19d00cf5e92e41dc415a");
 /*
-/// The modulus, minus two, as used for calculating modular inverses.
+/// The modulus, minus two, as usable for calculating modular inverses.
 const MODULUS_MINUS_TWO: HelioseleneField = HelioseleneField(U256::from_be_hex(
   "7fffffffffffffffffffffffffffffffbf7f782cb7656b586eb6d2727927c79d",
 ));
 */
 /// The modulus, plus one, divided by four, as used for calculating square roots.
-const MODULUS_PLUS_ONE_DIV_FOUR: HelioseleneField = HelioseleneField(U256::from_le_hex(
-  "e8f1499e9cb4ad1bd65ad92d0bdedfefffffffffffffffffffffffffffffff1f",
+const MODULUS_PLUS_ONE_DIV_FOUR: HelioseleneField = HelioseleneField(U256::from_be_hex(
+  "1ffffffffffffffffffffffffffffffffdcd5207465a7cc5fe6142da37c477d5",
 ));
 
 impl From<u8> for HelioseleneField {
@@ -372,6 +372,14 @@ impl<'a> Product<&'a HelioseleneField> for HelioseleneField {
 }
 
 impl HelioseleneField {
+  /// A `const fn` to create a `HelioseleneField` element from a `U256`.
+  ///
+  /// This should only be called at time of compile as it defers to a less efficient
+  /// implementation.
+  pub(crate) const fn from_u256(value: &U256) -> Self {
+    Self(value.const_rem(&MODULUS).0)
+  }
+
   /// Perform an exponentation.
   pub fn pow(&self, exp: Self) -> Self {
     let mut table = [Self::ONE; 16];
@@ -555,7 +563,7 @@ impl Field for HelioseleneField {
         should be much tricker for an optimization pass.
       */
       const MODULUS_XOR_TWO_MODULUS: U256 =
-        U256::from_be_hex("80000000000000000000000000000000c1818875d9afbde8b3db76968b6848a1");
+        U256::from_be_hex("80000000000000000000000000000000195fd8272bba15380a8f1db9613261f5");
       /*
         Add two instances of the modulus if:
         - We must add one instance due to the current number being negative
@@ -672,19 +680,8 @@ impl Field for HelioseleneField {
     }
     res *= old_res;
 
-    // Then the bits have 0111111 twice
-    let six = four_zero_zero * table[3];
-    for _ in 0 .. 7 {
-      res = res.square();
-    }
-    res *= six;
-    for _ in 0 .. 7 {
-      res = res.square();
-    }
-    res *= six;
-
     let mut bits = 0;
-    for bit in MODULUS_PLUS_ONE_DIV_FOUR.to_le_bits().iter().take(253).rev().skip(142) {
+    for bit in MODULUS_PLUS_ONE_DIV_FOUR.to_le_bits().iter().take(253).rev().skip(128) {
       bits <<= 1;
       let bit = u8::from(*bit);
       bits |= bit;
@@ -697,7 +694,8 @@ impl Field for HelioseleneField {
       }
     }
 
-    // We don't handle the final bit window as it's zero
+    // Handle the final window
+    res *= table[usize::from(bits)];
 
     // Normalize to the even choice of square root
     // `let ()` is used to assert how `conditional_negate` operates in-place
@@ -715,23 +713,23 @@ impl PrimeField for HelioseleneField {
   type Repr = [u8; 32];
 
   const MODULUS: &'static str =
-    "0x7fffffffffffffffffffffffffffffffbf7f782cb7656b586eb6d2727927c79f";
+    "0x7ffffffffffffffffffffffffffffffff735481d1969f317f9850b68df11df53";
 
   const NUM_BITS: u32 = 255;
   const CAPACITY: u32 = 254;
 
   const TWO_INV: Self =
-    Self(U256::from_le_hex("d0e3933c39695b37acb5b25b16bcbfdfffffffffffffffffffffffffffffff3f"));
+    Self(U256::from_be_hex("3ffffffffffffffffffffffffffffffffb9aa40e8cb4f98bfcc285b46f88efaa"));
 
-  const MULTIPLICATIVE_GENERATOR: Self = Self(U256::from_u8(5));
+  const MULTIPLICATIVE_GENERATOR: Self = Self(U256::from_u8(2));
   const S: u32 = 1;
 
   const ROOT_OF_UNITY: Self =
-    Self(U256::from_be_hex("7fffffffffffffffffffffffffffffffbf7f782cb7656b586eb6d2727927c79e"));
+    Self(U256::from_be_hex("7ffffffffffffffffffffffffffffffff735481d1969f317f9850b68df11df52"));
   const ROOT_OF_UNITY_INV: Self =
-    Self(U256::from_le_hex("9ec7277972d2b66e586b65b72c787fbfffffffffffffffffffffffffffffff7f"));
+    Self(U256::from_be_hex("7ffffffffffffffffffffffffffffffff735481d1969f317f9850b68df11df52"));
 
-  const DELTA: Self = Self(U256::from_u8(25));
+  const DELTA: Self = Self(U256::from_u8(4));
 
   fn from_repr(bytes: Self::Repr) -> CtOption<Self> {
     let res = U256::from_le_slice(&bytes);

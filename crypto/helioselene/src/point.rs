@@ -23,10 +23,9 @@ macro_rules! curve {
     $Field: ident,
     $Point: ident,
     $B: expr,
-    $G_X: expr,
     $G_Y: expr,
   ) => {
-    const G_X: $Field = $G_X;
+    const G_X: $Field = $Field::from_u256(&U256::from_u8(1));
     const G_Y: $Field = $G_Y;
 
     const B: $Field = $B;
@@ -34,7 +33,7 @@ macro_rules! curve {
     // Evaluate the curve equation to obtain what would be the `y^2` for this `x`, if it was the
     // `x` coordinate for a valid, on-curve point
     fn curve_equation(x: $Field) -> $Field {
-      (x.square() * x) - x - x - x + B
+      (x.square() * x) - x.double() - x + B
     }
 
     fn recover_y(x: $Field) -> CtOption<$Field> {
@@ -448,13 +447,10 @@ mod helios {
     Field25519,
     HeliosPoint,
     Field25519::from_u256(&U256::from_be_hex(
-      "22e8c739b0ea70b8be94a76b3ebb7b3b043f6f384113bf3522b49ee1edd73ad4"
+      "26bdec0884fe05f20cb42071569fab6432be360d07da8c5b460b82b980fd8c60"
     )),
     Field25519::from_u256(&U256::from_be_hex(
-      "0000000000000000000000000000000000000000000000000000000000000003"
-    )),
-    Field25519::from_u256(&U256::from_be_hex(
-      "537b74d97ac0721cbd92668350205f0759003bddc586a5dcd243e639e3183ef4"
+      "611dffc62fe02c759e5ac10f40e009b8e3b147387068aaf810dbdf2d817c67ba"
     )),
   );
 
@@ -468,7 +464,8 @@ mod helios {
     use helios::{G_X, G_Y, G};
     assert!(G.x == G_X);
     assert!(G.y == G_Y);
-    assert!(recover_y(G.x).unwrap() == -G.y);
+    assert!(recover_y(G.x).unwrap() == G.y);
+    assert!(bool::from(!G.y.is_odd()));
   }
 
   #[test]
@@ -488,11 +485,10 @@ mod selene {
     HelioseleneField,
     SelenePoint,
     HelioseleneField(U256::from_be_hex(
-      "70127713695876c17f51bba595ffe279f3944bdf06ae900e68de0983cb5a4558"
+      "38c40d10c226ef3bc597c2e1e25bc748e3401c3d031d14ca2265f309ba81efe4"
     )),
-    HelioseleneField(U256::ONE),
     HelioseleneField(U256::from_be_hex(
-      "7a19d927b85cca9257c93177455c825f938bb198c8f09b37741e0aa6a1d3fdd2"
+      "39098c0a54bd9d2781c7d734720d5ca639ee79deeefcd74517fced93ad6635c0"
     )),
   );
 
@@ -507,6 +503,7 @@ mod selene {
     assert!(G.x == G_X);
     assert!(G.y == G_Y);
     assert!(recover_y(G.x).unwrap() == G.y);
+    assert!(bool::from(!G.y.is_odd()));
   }
 
   #[test]
