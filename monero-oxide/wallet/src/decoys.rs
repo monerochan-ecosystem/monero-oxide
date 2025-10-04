@@ -10,7 +10,7 @@ use rand_distr::{Distribution, Gamma};
 use rand_distr::num_traits::Float;
 
 use curve25519_dalek::{Scalar, EdwardsPoint};
-use rand::seq::SliceRandom;
+use rand::seq::IteratorRandom;
 
 use crate::{
   DEFAULT_LOCK_WINDOW, COINBASE_LOCK_WINDOW, BLOCK_TIME,
@@ -261,8 +261,7 @@ fn make_ring(
   // bother with an overage
 
   // Form the complete ring
-  let mut ring =
-    potential_decoys.choose_multiple(rng, ring_len as usize - 1).cloned().collect::<Vec<_>>();
+  let mut ring = potential_decoys.into_iter().choose_multiple(rng, ring_len as usize - 1);
   ring.push((input.index_on_blockchain(), [input.key(), input.commitment().calculate()]));
   ring.sort_by(|a, b| a.0.cmp(&b.0));
 
