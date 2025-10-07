@@ -297,7 +297,7 @@ fn make_ring(
 
   Ok(OutputWithDecoys { output: input.data.clone(), decoys })
 }
-/// Use sample_candiates to select canidates, then fetch them as potential decoys from the RPC,
+/// Use sample_candidates to select canidates, then fetch them as potential decoys from the RPC,
 /// pass the result into this function to prepare the input with decoys for a transaction.
 fn make_output_with_decoys_sync(
   rng: &mut (impl RngCore + CryptoRng),
@@ -309,7 +309,7 @@ fn make_output_with_decoys_sync(
   let potential_decoys = filter_outputs(input, candidates, output_response)?;
   make_ring(rng, ring_len, input, potential_decoys)
 }
-/// Use sample_candiates to select canidates, then fetch them as potential decoys from the RPC,
+/// Use sample_candidates to select canidates, then fetch them as potential decoys from the RPC,
 /// fetch the transactions containing these decoys to determine if outputs are unlocked locally,
 /// pass the result into this function to prepare the input with decoys for a transaction.
 fn make_output_with_decoys_deterministic_sync(
