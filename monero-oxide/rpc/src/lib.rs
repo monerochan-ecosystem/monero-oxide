@@ -181,7 +181,8 @@ pub enum FeePriority {
 /// https://github.com/monero-project/monero/blob/ac02af92867590ca80b2779a7bbeafa99ff94dcb/
 ///   src/simplewallet/simplewallet.cpp#L161
 impl FeePriority {
-  pub(crate) fn fee_priority(&self) -> u32 {
+  /// Return the numeric representation of this priority as used by the Monero RPC.
+  pub fn fee_priority(&self) -> u32 {
     match self {
       FeePriority::Unimportant => 1,
       FeePriority::Normal => 2,
