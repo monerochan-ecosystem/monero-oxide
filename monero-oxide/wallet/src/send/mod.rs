@@ -1,4 +1,5 @@
 use core::{ops::Deref, fmt};
+use serde::Serialize;
 use std_shims::{
   io, vec,
   vec::Vec,
@@ -141,7 +142,7 @@ impl InternalPayment {
 }
 
 /// An error while sending Monero.
-#[derive(Clone, PartialEq, Eq, Debug, thiserror::Error)]
+#[derive(Clone, PartialEq, Eq, Debug, thiserror::Error, Serialize)]
 pub enum SendError {
   /// The RingCT type to produce proofs for this transaction with weren't supported.
   #[error("this library doesn't yet support that RctType")]

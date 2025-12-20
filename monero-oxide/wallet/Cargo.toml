@@ -19,11 +19,22 @@ ignored = ["monero-clsag"]
 workspace = true
 
 [dependencies]
+serde = { version = "1", default-features = false, features = [
+  "derive",
+  "alloc",
+  "std",
+] }
+serde_json = { version = "1", default-features = false, features = [
+  "alloc",
+  "std",
+] }
 std-shims = { version = "0.1.5", default-features = false }
 
 thiserror = { version = "2", default-features = false }
 
-zeroize = { version = "^1.5", default-features = false, features = ["zeroize_derive"] }
+zeroize = { version = "^1.5", default-features = false, features = [
+  "zeroize_derive",
+] }
 
 rand_core = { version = "0.6", default-features = false }
 # Used to send transactions
@@ -32,11 +43,19 @@ rand_chacha = { version = "0.3", default-features = false }
 # Used to select decoys
 rand_distr = { version = "0.4", default-features = false }
 
-curve25519-dalek = { version = "4", default-features = false, features = ["alloc", "zeroize", "group"] }
+curve25519-dalek = { version = "4", default-features = false, features = [
+  "alloc",
+  "zeroize",
+  "group",
+] }
 
 # Multisig dependencies
-transcript = { package = "flexible-transcript", version = "0.3", default-features = false, features = ["recommended"], optional = true }
-frost = { package = "modular-frost", version = "0.11", default-features = false, features = ["ed25519"], optional = true }
+transcript = { package = "flexible-transcript", version = "0.3", default-features = false, features = [
+  "recommended",
+], optional = true }
+frost = { package = "modular-frost", version = "0.11", default-features = false, features = [
+  "ed25519",
+], optional = true }
 
 hex = { version = "0.4", default-features = false, features = ["alloc"] }
 
@@ -46,10 +65,11 @@ monero-rpc = { path = "../rpc", default-features = false }
 monero-address = { path = "./address", default-features = false }
 
 [dev-dependencies]
-serde = { version = "1", default-features = false, features = ["derive", "alloc", "std"] }
-serde_json = { version = "1", default-features = false, features = ["alloc", "std"] }
 
-frost = { package = "modular-frost", version = "0.11", default-features = false, features = ["ed25519", "tests"] }
+frost = { package = "modular-frost", version = "0.11", default-features = false, features = [
+  "ed25519",
+  "tests",
+] }
 
 tokio = { version = "1", features = ["sync", "macros"] }
 
@@ -73,6 +93,9 @@ std = [
   "monero-rpc/std",
   "monero-address/std",
 ]
-compile-time-generators = ["curve25519-dalek/precomputed-tables", "monero-oxide/compile-time-generators"]
+compile-time-generators = [
+  "curve25519-dalek/precomputed-tables",
+  "monero-oxide/compile-time-generators",
+]
 multisig = ["std", "transcript", "frost", "monero-clsag/multisig"]
 default = ["std", "compile-time-generators"]
