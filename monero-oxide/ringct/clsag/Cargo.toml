@@ -16,23 +16,41 @@ rustdoc-args = ["--cfg", "docsrs"]
 workspace = true
 
 [dependencies]
+serde = { version = "1", default-features = false, features = [
+  "derive",
+  "alloc",
+  "std",
+] }
+serde_json = { version = "1", default-features = false, features = [
+  "alloc",
+  "std",
+] }
 std-shims = { version = "0.1.5", default-features = false }
 
 thiserror = { version = "2", default-features = false }
 
 rand_core = { version = "0.6", default-features = false }
-zeroize = { version = "^1.5", default-features = false, features = ["zeroize_derive"] }
+zeroize = { version = "^1.5", default-features = false, features = [
+  "zeroize_derive",
+] }
 subtle = { version = "^2.4", default-features = false }
 
 # Cryptographic dependencies
-curve25519-dalek = { version = "4", default-features = false, features = ["alloc", "zeroize"] }
+curve25519-dalek = { version = "4", default-features = false, features = [
+  "alloc",
+  "zeroize",
+] }
 
 # Multisig dependencies
 rand_chacha = { version = "0.3", default-features = false, optional = true }
-transcript = { package = "flexible-transcript", version = "0.3", default-features = false, features = ["recommended"], optional = true }
+transcript = { package = "flexible-transcript", version = "0.3", default-features = false, features = [
+  "recommended",
+], optional = true }
 group = { version = "0.13", default-features = false, optional = true }
 dalek-ff-group = { version = "0.5", default-features = false, optional = true }
-frost = { package = "modular-frost", version = "0.11", default-features = false, features = ["ed25519"], optional = true }
+frost = { package = "modular-frost", version = "0.11", default-features = false, features = [
+  "ed25519",
+], optional = true }
 
 # Other Monero dependencies
 monero-io = { path = "../../io", version = "0.1", default-features = false }
@@ -40,7 +58,10 @@ monero-generators = { path = "../../generators", version = "0.4", default-featur
 monero-primitives = { path = "../../primitives", version = "0.1", default-features = false }
 
 [dev-dependencies]
-frost = { package = "modular-frost", version = "0.11", default-features = false, features = ["ed25519", "tests"] }
+frost = { package = "modular-frost", version = "0.11", default-features = false, features = [
+  "ed25519",
+  "tests",
+] }
 
 [features]
 std = [
@@ -59,5 +80,12 @@ std = [
   "monero-generators/std",
   "monero-primitives/std",
 ]
-multisig = ["rand_chacha", "transcript", "group", "dalek-ff-group", "frost", "std"]
+multisig = [
+  "rand_chacha",
+  "transcript",
+  "group",
+  "dalek-ff-group",
+  "frost",
+  "std",
+]
 default = ["std"]

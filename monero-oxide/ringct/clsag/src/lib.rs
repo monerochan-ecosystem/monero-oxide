@@ -3,6 +3,7 @@
 #![deny(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![allow(non_snake_case)]
+use serde::Serialize;
 
 use core::ops::Deref;
 use std_shims::{
@@ -36,7 +37,7 @@ pub use multisig::{ClsagMultisigMaskSender, ClsagAddendum, ClsagMultisig};
 mod tests;
 
 /// Errors when working with CLSAGs.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, thiserror::Error)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, thiserror::Error, Serialize)]
 pub enum ClsagError {
   /// The ring was invalid (such as being too small or too large).
   #[error("invalid ring")]

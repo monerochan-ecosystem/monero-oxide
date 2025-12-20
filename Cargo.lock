@@ -871,6 +871,8 @@ dependencies = [
  "monero-primitives",
  "rand_chacha",
  "rand_core",
+ "serde",
+ "serde_json",
  "std-shims",
  "subtle",
  "thiserror",
