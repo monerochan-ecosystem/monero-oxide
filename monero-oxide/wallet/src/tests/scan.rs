@@ -3,15 +3,14 @@ use zeroize::Zeroizing;
 use curve25519_dalek::{Scalar, constants::ED25519_BASEPOINT_TABLE};
 
 use crate::{
-  io::CompressedPoint,
-  Commitment,
-  ringct::EncryptedAmount,
-  transaction::{Timelock, Pruned, Transaction},
+  Commitment, PaymentId, Scanner, ViewPair, WalletOutput,
   block::Block,
+  io::CompressedPoint,
+  output::{AbsoluteId, Metadata, OutputData, RelativeId},
+  ringct::EncryptedAmount,
   rpc::ScannableBlock,
-  PaymentId,
-  output::{AbsoluteId, RelativeId, OutputData, Metadata},
-  WalletOutput, ViewPair, Scanner,
+  scan::{NotTimelocked},
+  transaction::{Pruned, Timelock, Transaction},
 };
 
 const SPEND_KEY: &str = "ccf0ea10e1ea64354f42fa710c2b318e581969cf49046d809d1f0aadb3fc7a02";
@@ -151,7 +150,7 @@ fn scan_long_encrypted_amount() {
   // Prepare scanner
   let spend_pub = &*spend_key * ED25519_BASEPOINT_TABLE;
   let view: ViewPair = ViewPair::new(spend_pub, view_key).unwrap();
-  let mut scanner = Scanner::new(view);
+  let scanner = Scanner::new(view);
 
   // Prepare scannable block
   let txs: Vec<Transaction<Pruned>> = vec![tx];
@@ -167,4 +166,76 @@ fn scan_long_encrypted_amount() {
   assert_eq!(outputs.len(), 2);
   assert_eq!(outputs[0], wallet_output0());
   assert_eq!(outputs[1], wallet_output1());
+}
+
+#[test]
+fn scan_one_onchain_one_offchain_transaction() {
+  // Parse strings
+  let spend_key_buf = hex::decode(SPEND_KEY).unwrap();
+  let spend_key =
+    Zeroizing::new(Scalar::from_canonical_bytes(spend_key_buf.try_into().unwrap()).unwrap());
+
+  let view_key_buf = hex::decode(VIEW_KEY).unwrap();
+  let view_key =
+    Zeroizing::new(Scalar::from_canonical_bytes(view_key_buf.try_into().unwrap()).unwrap());
+
+  let tx_buf = hex::decode(PRUNED_TX_WITH_LONG_ENCRYPTED_AMOUNT).unwrap();
+  let tx = Transaction::<Pruned>::read(&mut tx_buf.as_slice()).unwrap();
+  let block_buf = hex::decode(BLOCK).unwrap();
+  let block = Block::read(&mut block_buf.as_slice()).unwrap();
+
+  // Confirm tx has long form encrypted amounts
+  match &tx {
+    Transaction::V2 { prefix: _, proofs } => {
+      let proofs = proofs.clone().unwrap();
+      assert_eq!(proofs.base.encrypted_amounts.len(), 2);
+      assert!(proofs
+        .base
+        .encrypted_amounts
+        .iter()
+        .all(|o| matches!(o, EncryptedAmount::Original { .. })));
+    }
+    _ => panic!("Unexpected tx version"),
+  };
+
+  // Prepare scanner
+  let spend_pub = &*spend_key * ED25519_BASEPOINT_TABLE;
+  let view: ViewPair = ViewPair::new(spend_pub, view_key).unwrap();
+  let scanner = Scanner::new(view);
+
+  // Scan one on chain transaciton
+  let tx_hash = block.transactions[0];
+  let onchain_outputs =
+    scanner.scan_transaction(Some(OUTPUT_INDEX_FOR_FIRST_RINGCT_OUTPUT), tx_hash, &tx);
+  if let NotTimelocked::OnChain(outputs) = &onchain_outputs.unwrap().ignore_additional_timelock() {
+    assert_eq!(outputs.len(), 2);
+    assert_eq!(
+      outputs[0].relative_id.index_on_blockchain,
+      wallet_output0().relative_id.index_on_blockchain
+    );
+
+    assert_eq!(
+      outputs[1].relative_id.index_on_blockchain,
+      wallet_output1().relative_id.index_on_blockchain
+    );
+  } else {
+    panic!("Expected onchain outputs");
+  }
+  let tx_hash = block.transactions[0];
+  let offchain_outputs = scanner.scan_transaction(None, tx_hash, &tx);
+  if let NotTimelocked::OffChain(outputs) = &offchain_outputs.unwrap().ignore_additional_timelock()
+  {
+    assert_eq!(outputs.len(), 2);
+    assert_eq!(outputs[0].absolute_id.transaction, wallet_output0().absolute_id.transaction);
+    assert_eq!(
+      outputs[0].absolute_id.index_in_transaction,
+      wallet_output0().absolute_id.index_in_transaction
+    );
+    assert_eq!(
+      outputs[1].absolute_id.index_in_transaction,
+      wallet_output1().absolute_id.index_in_transaction
+    );
+  } else {
+    panic!("Expected offchain outputs");
+  }
 }

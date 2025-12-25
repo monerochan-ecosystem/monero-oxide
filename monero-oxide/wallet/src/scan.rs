@@ -17,7 +17,7 @@ use crate::{
 };
 
 /// A collection of potentially additionally timelocked outputs.
-#[derive(Zeroize, ZeroizeOnDrop)]
+#[derive(Clone, Zeroize, ZeroizeOnDrop)]
 pub struct Timelocked(Vec<WalletOutput>);
 
 impl Timelocked {
@@ -66,6 +66,103 @@ impl Timelocked {
   }
 }
 
+/// A collection of potentially additionally timelocked offchain outputs.
+#[derive(Clone, Zeroize, ZeroizeOnDrop)]
+pub struct OffChainTimelocked(Vec<OffChainWalletOutput>);
+
+impl OffChainTimelocked {
+  /// Return the outputs which aren't subject to an additional timelock.
+  #[must_use]
+  pub fn not_additionally_locked(self) -> Vec<OffChainWalletOutput> {
+    let mut res = vec![];
+    for output in &self.0 {
+      if output.additional_timelock() == Timelock::None {
+        res.push(output.clone());
+      }
+    }
+    res
+  }
+
+  /// Return the outputs whose additional timelock unlocks by the specified block/time.
+  ///
+  /// Additional timelocks are almost never used outside of miner transactions, and are
+  /// increasingly planned for removal. Ignoring non-miner additionally-timelocked outputs is
+  /// recommended.
+  ///
+  /// `block` is the block number of the block the additional timelock must be satsified by.
+  ///
+  /// `time` is represented in seconds since the epoch and is in terms of Monero's on-chain clock.
+  /// That means outputs whose additional timelocks are statisfied by `Instant::now()` (the time
+  /// according to the local system clock) may still be locked due to variance with Monero's clock.
+  #[must_use]
+  pub fn additional_timelock_satisfied_by(
+    self,
+    block: usize,
+    time: u64,
+  ) -> Vec<OffChainWalletOutput> {
+    let mut res = vec![];
+    for output in &self.0 {
+      if (output.additional_timelock() <= Timelock::Block(block)) ||
+        (output.additional_timelock() <= Timelock::Time(time))
+      {
+        res.push(output.clone());
+      }
+    }
+    res
+  }
+
+  /// Ignore the timelocks and return all outputs within this container.
+  #[must_use]
+  pub fn ignore_additional_timelock(mut self) -> Vec<OffChainWalletOutput> {
+    let mut res = vec![];
+    core::mem::swap(&mut self.0, &mut res);
+    res
+  }
+}
+#[derive(Clone, Zeroize, ZeroizeOnDrop)]
+pub enum NotTimelocked {
+  OnChain(Vec<WalletOutput>), // Timelocked is Timelocked<Vec<WalletOutput>>
+  OffChain(Vec<OffChainWalletOutput>), // same but off chain ( no relative id / index_on_blockchain)
+}
+
+#[derive(Clone, Zeroize, ZeroizeOnDrop)]
+pub enum TransactionScanResult {
+  OnChain(Timelocked),          // Timelocked is Timelocked<Vec<WalletOutput>>
+  OffChain(OffChainTimelocked), // same but off chain ( no relative id / index_on_blockchain)
+}
+impl TransactionScanResult {
+  pub fn ignore_additional_timelock(&self) -> NotTimelocked {
+    match self {
+      Self::OnChain(t) => NotTimelocked::OnChain(t.clone().ignore_additional_timelock()),
+      Self::OffChain(t) => NotTimelocked::OffChain(t.clone().ignore_additional_timelock()),
+    }
+  }
+  pub fn not_additionally_locked(&self) -> NotTimelocked {
+    match self {
+      Self::OnChain(t) => NotTimelocked::OnChain(t.clone().not_additionally_locked()),
+      Self::OffChain(t) => NotTimelocked::OffChain(t.clone().not_additionally_locked()),
+    }
+  }
+  pub fn additional_timelock_satisfied_by(&self, block: usize, time: u64) -> NotTimelocked {
+    match self {
+      Self::OnChain(t) => {
+        NotTimelocked::OnChain(t.clone().additional_timelock_satisfied_by(block, time))
+      }
+      Self::OffChain(t) => {
+        NotTimelocked::OffChain(t.clone().additional_timelock_satisfied_by(block, time))
+      }
+    }
+  }
+}
+
+impl std::fmt::Debug for TransactionScanResult {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Self::OnChain(t) => f.debug_struct("OnChain").field("Timelocked", &t.0).finish(),
+      Self::OffChain(t) => f.debug_struct("OffChain").field("OffChainTimelocked", &t.0).finish(),
+    }
+  }
+}
 /// Errors when scanning a block.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, thiserror::Error)]
 pub enum ScanError {
@@ -257,8 +354,38 @@ impl InternalScanner {
 
     Ok(Timelocked(res))
   }
+  // Scan a transaction that is potentially not on chain (pool, supplied out of band)
+  // if output_index_for_first_ringct_output is None, it will be scanned as offchain
+  fn scan_one_transaction(
+    &self,
+    output_index_for_first_ringct_output: Option<u64>,
+    tx_hash: [u8; 32],
+    tx: &Transaction<Pruned>,
+  ) -> Result<TransactionScanResult, ScanError> {
+    match output_index_for_first_ringct_output {
+      Some(index) => {
+        let result = self.scan_transaction(index, tx_hash, tx)?;
+        Ok(TransactionScanResult::OnChain(result))
+      }
+      None => {
+        const DUMMY: u64 = 1337;
+        let temp_onchain_timelocked = self.scan_transaction(DUMMY, tx_hash, tx)?;
+        let temp_onchain_outputs = temp_onchain_timelocked.ignore_additional_timelock();
+        let mut offchain_outputs = Vec::with_capacity(temp_onchain_outputs.len());
+        for output in temp_onchain_outputs {
+          offchain_outputs.push(OffChainWalletOutput {
+            absolute_id: output.absolute_id.clone(),
+            data: output.data.clone(),
+            metadata: output.metadata.clone(),
+          });
+        }
 
-  fn scan(&mut self, block: ScannableBlock) -> Result<Timelocked, ScanError> {
+        Ok(TransactionScanResult::OffChain(OffChainTimelocked(offchain_outputs)))
+      }
+    }
+  }
+
+  fn scan(&self, block: ScannableBlock) -> Result<Timelocked, ScanError> {
     // This is the output index for the first RingCT output within the block
     // We mutate it to be the output index for the first RingCT for each transaction
     let ScannableBlock { block, transactions, output_index_for_first_ringct_output } = block;
@@ -347,8 +474,17 @@ impl Scanner {
   }
 
   /// Scan a block.
-  pub fn scan(&mut self, block: ScannableBlock) -> Result<Timelocked, ScanError> {
+  pub fn scan(&self, block: ScannableBlock) -> Result<Timelocked, ScanError> {
     self.0.scan(block)
+  }
+  /// Scan a transaction
+  pub fn scan_transaction(
+    &self,
+    output_index_for_first_ringct_output: Option<u64>,
+    tx_hash: [u8; 32],
+    tx: &Transaction<Pruned>,
+  ) -> Result<TransactionScanResult, ScanError> {
+    self.0.scan_one_transaction(output_index_for_first_ringct_output, tx_hash, tx)
   }
 }
 
