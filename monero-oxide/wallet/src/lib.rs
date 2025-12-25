@@ -33,7 +33,9 @@ pub(crate) mod output;
 pub use output::WalletOutput;
 
 mod scan;
-pub use scan::{Timelocked, ScanError, Scanner, GuaranteedScanner};
+pub use scan::{
+  TransactionScanResult, NotTimelocked, Timelocked, ScanError, Scanner, GuaranteedScanner,
+};
 
 mod decoys;
 pub use decoys::OutputWithDecoys;
