@@ -383,3 +383,121 @@ impl WalletOutput {
     })
   }
 }
+
+#[derive(Clone, PartialEq, Eq, Debug, Zeroize, ZeroizeOnDrop)]
+pub struct OffChainWalletOutput {
+  /// The absolute ID for this transaction.
+  pub(crate) absolute_id: AbsoluteId,
+
+  /// The output's data.
+  pub(crate) data: OutputData,
+  /// Associated metadata relevant for handling it as a payment.
+  pub(crate) metadata: Metadata,
+}
+
+impl OffChainWalletOutput {
+  /// The hash of the transaction which created this output.
+  pub fn transaction(&self) -> [u8; 32] {
+    self.absolute_id.transaction
+  }
+
+  /// The index of the output within the transaction.
+  pub fn index_in_transaction(&self) -> u64 {
+    self.absolute_id.index_in_transaction
+  }
+
+  /// The key this output may be spent by.
+  pub fn key(&self) -> EdwardsPoint {
+    self.data.key()
+  }
+
+  /// The scalar to add to the private spend key for it to be the discrete logarithm of this
+  /// output's key.
+  pub fn key_offset(&self) -> Scalar {
+    self.data.key_offset()
+  }
+
+  /// The commitment this output created.
+  pub fn commitment(&self) -> &Commitment {
+    self.data.commitment()
+  }
+
+  /// The additional timelock this output is subject to.
+  ///
+  /// All outputs are subject to the '10-block lock', a 10-block window after their inclusion
+  /// on-chain during which they cannot be spent. Outputs may be additionally timelocked. This
+  /// function only returns the additional timelock.
+  pub fn additional_timelock(&self) -> Timelock {
+    self.metadata.additional_timelock
+  }
+
+  /// The index of the subaddress this output was identified as sent to.
+  pub fn subaddress(&self) -> Option<SubaddressIndex> {
+    self.metadata.subaddress
+  }
+
+  /// The payment ID included with this output.
+  ///
+  /// This field may be `Some` even if wallet2 would not return a payment ID. wallet2 will only
+  /// decrypt a payment ID if either:
+  ///
+  /// A) The transaction wasn't made by the wallet (via checking if any key images are recognized)
+  /// B) For the highest-indexed input with a recognized key image, it spends an output with
+  ///    subaddress account `(a, _)` which is distinct from this output's subaddress account
+  ///
+  /// Neither of these cases are handled by `monero-wallet` as scanning doesn't have the context
+  /// of key images.
+  //
+  // Identification of the subaddress account for the highest-indexed input with a recognized key
+  // image:
+  //   https://github.com/monero-project/monero/blob/a1dc85c5373a30f14aaf7dcfdd95f5a7375d3623
+  //     /src/wallet/wallet2.cpp/#L2637-L2670
+  //
+  // Removal of 'transfers' received to this account:
+  //   https://github.com/monero-project/monero/blob/a1dc85c5373a30f14aaf7dcfdd95f5a7375d3623
+  //     /src/wallet/wallet2.cpp/#L2782-L2794
+  //
+  // Payment IDs only being decrypted for the remaining transfers:
+  //   https://github.com/monero-project/monero/blob/a1dc85c5373a30f14aaf7dcfdd95f5a7375d3623
+  //     /src/wallet/wallet2.cpp/#L2796-L2844
+  pub fn payment_id(&self) -> Option<PaymentId> {
+    self.metadata.payment_id
+  }
+
+  /// The arbitrary data from the `extra` field of the transaction which created this output.
+  pub fn arbitrary_data(&self) -> &[Vec<u8>] {
+    &self.metadata.arbitrary_data
+  }
+
+  /// Write the WalletOutput.
+  ///
+  /// This is not a Monero protocol defined struct, and this is accordingly not a Monero protocol
+  /// defined serialization.
+  pub fn write<W: Write>(&self, w: &mut W) -> io::Result<()> {
+    self.absolute_id.write(w)?;
+    self.data.write(w)?;
+    self.metadata.write(w)
+  }
+
+  /// Serialize the WalletOutput to a `Vec<u8>`.
+  ///
+  /// This is not a Monero protocol defined struct, and this is accordingly not a Monero protocol
+  /// defined serialization.
+  pub fn serialize(&self) -> Vec<u8> {
+    let mut serialized = Vec::with_capacity(128);
+    self.write(&mut serialized).expect("write failed but <Vec as io::Write> doesn't fail");
+    serialized
+  }
+
+  /// Read a WalletOutput.
+  ///
+  /// This is not a Monero protocol defined struct, and this is accordingly not a Monero protocol
+  /// defined serialization.
+  pub fn read<R: Read>(r: &mut R) -> io::Result<OffChainWalletOutput> {
+    Ok(OffChainWalletOutput {
+      absolute_id: AbsoluteId::read(r)?,
+      data: OutputData::read(r)?,
+      metadata: Metadata::read(r)?,
+    })
+  }
+}
