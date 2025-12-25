@@ -119,30 +119,48 @@ impl OffChainTimelocked {
     res
   }
 }
+/// union of onchain and offchain outputs,
+///  that are not timelocked / where additional timelocks have been explicitly ignored
 #[derive(Clone, Zeroize, ZeroizeOnDrop)]
 pub enum NotTimelocked {
-  OnChain(Vec<WalletOutput>), // Timelocked is Timelocked<Vec<WalletOutput>>
-  OffChain(Vec<OffChainWalletOutput>), // same but off chain ( no relative id / index_on_blockchain)
+  /// vec of WalletOutput
+  OnChain(Vec<WalletOutput>),
+  /// vec of OffChainWalletOutput, difference from WalletOutput:
+  ///  off chain ( no relative id / index_on_blockchain)
+  OffChain(Vec<OffChainWalletOutput>),
 }
 
 #[derive(Clone, Zeroize, ZeroizeOnDrop)]
+/// direct result of scanning a transaction
+///
+/// use not_additionally_locked to obtain WalletOutput vec / OffChainWalletOutput vec
+/// (with the additional timelocks honored)
+///
+/// use ignore_additional_timelock to obtain WalletOutput vec / OffChainWalletOutput vec
+/// (with the additional timelocks ignored)
 pub enum TransactionScanResult {
-  OnChain(Timelocked),          // Timelocked is Timelocked<Vec<WalletOutput>>
-  OffChain(OffChainTimelocked), // same but off chain ( no relative id / index_on_blockchain)
+  /// Timelocked is Timelocked Vec of WalletOutput
+  OnChain(Timelocked),
+  ///  vec of timlocked OffChainWalletOutput,
+  ///  difference from WalletOutput: off chain ( no relative id / index_on_blockchain)
+  OffChain(OffChainTimelocked),
 }
 impl TransactionScanResult {
+  /// ignore the timelocks and return all outputs within this container
   pub fn ignore_additional_timelock(&self) -> NotTimelocked {
     match self {
       Self::OnChain(t) => NotTimelocked::OnChain(t.clone().ignore_additional_timelock()),
       Self::OffChain(t) => NotTimelocked::OffChain(t.clone().ignore_additional_timelock()),
     }
   }
+  /// return the outputs which aren't subject to an additional timelock
   pub fn not_additionally_locked(&self) -> NotTimelocked {
     match self {
       Self::OnChain(t) => NotTimelocked::OnChain(t.clone().not_additionally_locked()),
       Self::OffChain(t) => NotTimelocked::OffChain(t.clone().not_additionally_locked()),
     }
   }
+  /// return the outputs whose additional timelock unlocks by the specified block/time
   pub fn additional_timelock_satisfied_by(&self, block: usize, time: u64) -> NotTimelocked {
     match self {
       Self::OnChain(t) => {
